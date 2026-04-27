@@ -18,9 +18,10 @@ A construção da GUI da Tabela de Produtos deve sempre favorecer a **Experiênc
   3. `DELETE` todos os vínculos-filhos no DB com base no novo/velho ID mãe;
   4. Mapeia e dá `INSERT` bulk de toda a variável de array de `vinculos` direto na tabela ponte (`insumos`), passando o ID recém-criado na linha mãe.
 
-### 1.2 Tratamento do Supabase Storage (Imagens do Cardápio)
-Ao injetarmos imagens para o Agente ter referência, você DEVE construir uma feature de *Upload assíncrono* de imagem:
-- **Bucket Spec:** Exija ou crie o bucket com nome `produtos` ativando `public: true`! O URL salvo na `tabela_negocios` tem de ser do modelo `.../public/produtos/nomegerado.png` (via `getPublicUrl`).
+### 1.2 Tratamento do Supabase Storage (Imagens e Disponibilidade)
+Ao injetarmos imagens para o Agente ter referência visual e técnica do que está disponível:
+- **Bucket Spec:** Exija ou crie o bucket com nome `produtos` ativando `public: true`.
+- **Vínculo com Disponibilidade:** O URL da imagem deve estar na mesma linha que define o status de estoque. Isso permite que a IA responda: "Temos o item X em estoque (veja: url_da_imagem)".
 - **Row-Level Security p/ Buckets:** O upload do frontend quebrará se a RLS `storage.objects` não estiver mapeada. A IA DEVE gerar e fornecer a *Migration SQL* de Storage (Ver Seção 2).
 
 ---
@@ -84,15 +85,34 @@ BEGIN
 
     -- 3. Inserir a nova versão (SE a operação não tiver sido um DELETE originário do PAI)
     IF TG_OP != 'DELETE' THEN
-        -- a. Faça seus SELECTS com JOINs aqui! 
-        -- Puxe o produto, estoques cruzados, nome e qtd dos Insumos da tabela ponte do FrontEnd
-        -- b. Concatene com regras literais para que o LLM entenda
-        v_TextoContexto := concat('A entidade X tem as propriedades: ', NEW."prop1", ' ...');
+        -- b. Concatene com regras literais para que o LLM entenda (Templates Oficiais):
+        
+        -- TEMPLATE 1: DISPONIBILIDADE / ESTOQUE
+        IF (tabela_origem = 'tb_produtos') THEN
+            v_TextoContexto := concat(
+                'PRODUTO: ', NEW.nome, 
+                ' | STATUS: ', CASE WHEN NEW.estoque > 0 THEN 'Disponível' ELSE 'Indisponível/Esgotado' END,
+                ' | ESTOQUE: ', NEW.estoque, ' unidades',
+                ' | PREÇO: R$', NEW.preco,
+                ' | DESCRIÇÃO: ', NEW.descricao,
+                ' | IMAGEM: ', COALESCE(NEW.imagem_url, 'Sem foto')
+            );
+        END IF;
+
+        -- TEMPLATE 2: OBJEÇÕES / FAQ
+        IF (tabela_origem = 'tb_duvidas') THEN
+            v_TextoContexto := concat(
+                'OBJEÇÃO/DÚVIDA: ', NEW.pergunta, 
+                ' | RESPOSTA OFICIAL: ', NEW.resposta
+            );
+        END IF;
         
         -- c. Inject Jsonb estilo LangChain obrigatório ('loc', 'source', chaves livres custom)
         v_Metadata := jsonb_build_object(
             'id_ref', v_RefId,
+            'tenant_id', NEW.tenant_id,
             'source', concat('referencia_db_', v_RefId),
+            'type', CASE WHEN tabela_origem = 'tb_produtos' THEN 'disponibilidade' ELSE 'objecao' END,
             'loc', jsonb_build_object('lines', jsonb_build_object('from', 1, 'to', 1)) 
         );
 
