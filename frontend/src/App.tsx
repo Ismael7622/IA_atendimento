@@ -242,7 +242,10 @@ export default function App() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isLoadingClientes, setIsLoadingClientes] = useState(false);
   const [selectedClienteId, setSelectedClienteId] = useState<string>('');
-  
+  const selectedCliente = useMemo(() => 
+    clientes.find(c => c.id === selectedClienteId), 
+    [clientes, selectedClienteId]
+  );
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -272,6 +275,8 @@ export default function App() {
   const [scrapedProducts, setScrapedProducts] = useState<any[]>([]);
   const [selectedScrapedIndices, setSelectedScrapedIndices] = useState<number[]>([]);
   const [instanceStatuses, setInstanceStatuses] = useState<Record<string, 'conectado' | 'desconectado'>>({});
+  const [instanceProfiles, setInstanceProfiles] = useState<Record<string, string>>({});
+
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -285,18 +290,23 @@ export default function App() {
     objetivo: 'Gerar Leads',
     tipoConversao: 'Videochamada',
     papelHumano: '',
-    restricoes: [] as string[]
+    restricoes: [] as string[],
+    notificarEm: ''
   });
+
   const [novaRestricao, setNovaRestricao] = useState('');
   const [isSavingAI, setIsSavingAI] = useState(false);
+  const [isSavingNotificar, setIsSavingNotificar] = useState(false);
+  const [availableGroups, setAvailableGroups] = useState<any[]>([]);
+  const [isFetchingGroups, setIsFetchingGroups] = useState(false);
+  const [showGroups, setShowGroups] = useState(false);
+
 
   const [clientForm, setClientForm] = useState({
     telefone: ''
   });
 
-  const selectedCliente = useMemo(() => 
-    clientes.find(c => c.id === selectedClienteId), 
-  [clientes, selectedClienteId]);
+
 
   useEffect(() => {
     if (isLoggedIn) fetchClientes();
@@ -323,11 +333,18 @@ export default function App() {
     
     const interval = setInterval(() => {
       checkInstancesStatus(true); // true = silent check para notificações
-    }, 60000 * 5); // A cada 5 minutos
+    }, 60000); // A cada 1 minuto
+
 
     checkInstancesStatus(true);
     return () => clearInterval(interval);
   }, [isLoggedIn, clientes]);
+
+  useEffect(() => {
+    if (selectedClienteId && view === 'config') {
+      fetchAISettings();
+    }
+  }, [selectedClienteId, view]);
 
   useEffect(() => {
     if (view === 'conversas' && selectedPhone) {
@@ -400,16 +417,7 @@ export default function App() {
     return () => window.removeEventListener('paste', handlePaste);
   }, [isModalOpen]);
 
-  // Timer para QR Code na aba Admin
-  useEffect(() => {
-    let timer: any;
-    if (qrCode && qrTimeLeft > 0 && view === 'config') {
-      timer = setInterval(() => setQrTimeLeft(prev => prev - 1), 1000);
-    } else if (qrTimeLeft === 0) {
-      setQrCode(null);
-    }
-    return () => clearInterval(timer);
-  }, [qrCode, qrTimeLeft, view]);
+
 
   const fetchProdutos = async () => {
     const { data, error } = await supabase
@@ -574,23 +582,53 @@ export default function App() {
   };
 
   const checkInstancesStatus = async (silent = false) => {
+
     try {
-      const evolutionUrl = "https://api.storyallday.com"; 
-      const apiKey = "42702EAD4D0C42E8B9C894B3519E2B30"; 
+      const evolutionUrl = import.meta.env.VITE_EVOLUTION_URL || "https://api.storyallday.com"; 
+      const apiKey = import.meta.env.VITE_EVOLUTION_API_KEY; 
+
 
       const response = await fetch(`${evolutionUrl}/instance/fetchInstances`, {
         headers: { "apikey": apiKey }
       });
-      const data = await response.json();
+
+      if (response.status === 401) {
+        console.error("Erro 401: API Key inválida ou expirada.");
+        addToast("Erro de Autenticação na API (Key inválida)", "warning");
+        return;
+      }
+
+
+      const rawData = await response.json();
       
+      // A API pode retornar a lista diretamente ou dentro de um objeto { instances: [] }
+      const data = Array.isArray(rawData) ? rawData : (rawData.instances || []);
+      
+      if (!Array.isArray(data)) {
+        console.error("Formato de dados inesperado da API:", rawData);
+        return;
+      }
+
       const statuses: Record<string, 'conectado' | 'desconectado'> = {};
+      const profiles: Record<string, string> = {};
       const disconnectedClients: string[] = [];
 
       clientes.forEach(client => {
         if (!client.instance_name) return;
-        const instance = data.find((i: any) => i.name === client.instance_name);
-        const isConnected = instance?.connectionStatus === 'open';
+        const instance = data.find((i: any) => 
+          i.name === client.instance_name || 
+          i.instanceName === client.instance_name ||
+          i.instance?.name === client.instance_name
+        );
+        
+        const state = (instance?.connectionStatus || instance?.status || instance?.instance?.state || instance?.state || "").toLowerCase();
+        const isConnected = state === 'open' || state === 'connected' || state === 'conectado';
+          
         statuses[client.id] = isConnected ? 'conectado' : 'desconectado';
+
+        if (isConnected && (instance?.profilePictureUrl || instance?.instance?.profilePictureUrl)) {
+          profiles[client.id] = instance?.profilePictureUrl || instance?.instance?.profilePictureUrl;
+        }
 
         if (!isConnected && silent) {
           disconnectedClients.push(client.nome);
@@ -598,16 +636,12 @@ export default function App() {
       });
 
       setInstanceStatuses(statuses);
-
-      if (disconnectedClients.length > 0) {
-        disconnectedClients.forEach(name => {
-          addToast(`${name} está com o número desconectado!`, 'warning');
-        });
-      }
+      setInstanceProfiles(profiles);
     } catch (err) {
       console.error("Erro ao checar instâncias:", err);
     }
   };
+
 
   const addToast = (message: string, type: 'warning' | 'success') => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -644,8 +678,15 @@ export default function App() {
       const response = await fetch("https://webhook.storyallday.com/webhook/atualizar-qr-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instance: selectedCliente.instance_name })
+        body: JSON.stringify({ 
+          instance: selectedCliente.instance_name,
+          events: ["MESSAGES_UPSERT"],
+          ignore_events: ["CHATS_UPSERT"],
+          webhook_url: "https://webhook.storyallday.com/webhook/recebe-msg"
+        })
       });
+
+
       
       const contentType = response.headers.get("content-type");
 
@@ -788,7 +829,7 @@ export default function App() {
     const instanceName = `${userEmail}-${toSnakeCase(clientForm.nome)}`;
     const newId = 'cust_' + Date.now().toString(36);
     
-    // 1. Salva no Banco de Dados
+    // 1. Salva no Banco de Dados (Tabela de Clientes)
     const { error } = await supabase
       .from('z_bd_atendimento_clientes')
       .insert([{ 
@@ -800,14 +841,30 @@ export default function App() {
 
     if (error) return alert("Erro ao salvar cliente: " + error.message);
 
-    // 2. Dispara o Webhook de Instância
+    // 2. Cria a linha exclusiva na tabela de configurações da IA (Z minúsculo)
+    // Isso garante a persistência desde o primeiro momento
+    const { error: configError } = await supabase
+      .from('z_bd_configuracoes_ia')
+      .insert([{ 
+        cliente_id: newId,
+        updated_at: new Date().toISOString()
+      }]);
+
+    if (configError) console.error("Erro ao criar linha de config IA:", configError);
+
+    // 3. Dispara o Webhook de Instância na Evolution
     try {
       await fetch("https://webhook.storyallday.com/webhook/gerar-instancia", {
         method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: instanceName
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          instance: instanceName,
+          events: ["MESSAGES_UPSERT"],
+          ignore_events: ["CHATS_UPSERT"],
+          webhook_url: "https://webhook.storyallday.com/webhook/recebe-msg"
+        })
       });
-      console.log("Webhook disparado com sucesso!");
+      console.log("Webhook de instância disparado!");
     } catch (whError) {
       console.error("Erro ao disparar webhook:", whError);
     }
@@ -817,10 +874,34 @@ export default function App() {
     fetchClientes();
   };
 
+  const deleteClient = async (e: React.MouseEvent, clientId: string, clientName: string) => {
+    e.stopPropagation(); // Evita abrir o hub ao clicar no botão de excluir
+    
+    if (!window.confirm(`Tem certeza que deseja excluir o cliente "${clientName}"? Todos os dados vinculados a este cliente serão perdidos.`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('z_bd_atendimento_clientes')
+        .delete()
+        .eq('id', clientId);
+
+      if (error) throw error;
+
+      addToast(`Cliente "${clientName}" removido com sucesso!`, 'success');
+      fetchClientes();
+    } catch (err: any) {
+      console.error("Erro ao excluir cliente:", err);
+      addToast("Erro ao excluir cliente: " + err.message, 'warning');
+    }
+  };
+
+
   const fetchAISettings = async () => {
     if (!selectedClienteId) return;
     const { data, error } = await supabase
-      .from('Z_bd_configuracoes_ia')
+      .from('z_bd_configuracoes_ia')
       .select('*')
       .eq('cliente_id', selectedClienteId)
       .single();
@@ -833,8 +914,11 @@ export default function App() {
         objetivo: data.objetivo || 'Gerar Leads',
         tipoConversao: data.tipo_conversao || 'Videochamada',
         papelHumano: data.papel_humano || '',
-        restricoes: data.restricoes || []
+        restricoes: data.restricoes || [],
+        notificarEm: data.notificar_em || ''
       });
+
+
     } else {
       // Se não existir registro, resetamos para o padrão
       setAiSettings({
@@ -844,14 +928,18 @@ export default function App() {
         objetivo: 'Gerar Leads',
         tipoConversao: 'Videochamada',
         papelHumano: '',
-        restricoes: []
+        restricoes: [],
+        notificarEm: ''
       });
+
+
     }
   };
 
-  const saveAISettings = async () => {
+  const saveAISettings = async (isNotificar = false) => {
     if (!selectedClienteId) return;
-    setIsSavingAI(true);
+    if (isNotificar) setIsSavingNotificar(true);
+    else setIsSavingAI(true);
 
     const dbPayload = {
       cliente_id: selectedClienteId,
@@ -862,19 +950,21 @@ export default function App() {
       tipo_conversao: aiSettings.tipoConversao,
       papel_humano: aiSettings.papelHumano,
       restricoes: aiSettings.restricoes,
+      notificar_em: aiSettings.notificarEm,
       updated_at: new Date().toISOString()
     };
 
-    // Tenta fazer um UPSERT (Inserir ou Atualizar se já existir)
     const { error } = await supabase
-      .from('Z_bd_configuracoes_ia')
+      .from('z_bd_configuracoes_ia')
       .upsert(dbPayload, { onConflict: 'cliente_id' });
 
-    setIsSavingAI(false);
+    if (isNotificar) setIsSavingNotificar(false);
+    else setIsSavingAI(false);
+
     if (error) {
       addToast("Erro ao salvar configurações: " + error.message, 'warning');
     } else {
-      addToast("Configurações salvas na tabela dedicada!", 'success');
+      addToast(isNotificar ? "Local de notificação salvo!" : "Configurações da IA salvas!", 'success');
     }
   };
 
@@ -893,6 +983,25 @@ export default function App() {
       restricoes: prev.restricoes.filter((_, i) => i !== index)
     }));
   };
+
+  const fetchGroups = async () => {
+    if (!selectedCliente?.instance_name) return;
+    setIsFetchingGroups(true);
+    setShowGroups(true);
+    try {
+      const response = await fetch(`https://api.storyallday.com/group/fetchAllGroups/${selectedCliente.instance_name}?getParticipants=false`, {
+        headers: { "apikey": import.meta.env.VITE_EVOLUTION_API_KEY }
+      });
+      const data = await response.json();
+      setAvailableGroups(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Erro ao buscar grupos:", err);
+      addToast("Erro ao buscar grupos", "warning");
+    } finally {
+      setIsFetchingGroups(false);
+    }
+  };
+
 
   // Login Screen
   if (!isLoggedIn) {
@@ -963,13 +1072,36 @@ export default function App() {
                 <div 
                   key={cli.id} 
                   className="glass-panel client-card" 
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', position: 'relative' }}
                   onClick={() => {
                     setSelectedClienteId(cli.id);
                     setView('client-hub');
                   }}
                 >
+                  <button 
+                    onClick={(e) => deleteClient(e, cli.id, cli.nome)}
+                    className="delete-client-btn"
+                    style={{ 
+                      position: 'absolute', 
+                      top: '1rem', 
+                      right: '1rem', 
+                      background: 'rgba(239, 68, 68, 0.1)', 
+                      border: '1px solid rgba(239, 68, 68, 0.2)', 
+                      color: '#ef4444',
+                      padding: '6px',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease',
+                      zIndex: 10
+                    }}
+                    title="Excluir Cliente"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                   <h3>{cli.nome}</h3>
+
                   <p>{cli.email || 'Sem e-mail'}</p>
                   <p>{cli.telefone || 'Sem telefone'}</p>
                   <div style={{ marginTop: 'auto', paddingTop: '1rem' }}>
@@ -1040,7 +1172,7 @@ export default function App() {
 
   // Client Hub Screen
   if (view === 'client-hub') {
-    const selectedCliente = clientes.find(c => c.id === selectedClienteId);
+
     return (
       <div className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
         <button className="btn-outline" style={{ alignSelf: 'flex-start', marginBottom: '2rem' }} onClick={() => setView('home')}>
@@ -1089,7 +1221,7 @@ export default function App() {
   }
 
   const produtosFiltrados = produtos.filter(p => p.clienteId === selectedClienteId);
-  const clienteAtual = clientes.find(c => c.id === selectedClienteId);
+
 
   const renderConversasView = () => {
     return (
@@ -1231,10 +1363,36 @@ export default function App() {
               marginBottom: '1rem'
             }}>
               <div className="metric-label">Status da Instância</div>
-              <div className="metric-value" style={{ fontSize: '1.8rem', color: status === 'conectado' ? '#10b981' : '#f59e0b' }}>
-                {status === 'conectado' ? '🟢 Conectado' : '🔴 Desconectado'}
+              <div className="metric-value" style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '1rem', 
+                fontSize: '1.8rem', 
+                color: status === 'conectado' ? '#10b981' : '#f59e0b',
+                marginTop: '0.5rem'
+              }}>
+                {status === 'conectado' && instanceProfiles[selectedClienteId!] ? (
+                  <img 
+                    src={instanceProfiles[selectedClienteId!]} 
+                    alt="WhatsApp Profile" 
+                    style={{ 
+                      width: '48px', 
+                      height: '48px', 
+                      borderRadius: '50%', 
+                      objectFit: 'cover', 
+                      border: '2px solid #10b981',
+                      boxShadow: '0 0 15px rgba(16, 185, 129, 0.3)'
+                    }}
+                  />
+                ) : (
+                   status === 'conectado' ? '🟢' : '🔴'
+                )}
+                <span style={{ fontWeight: 700 }}>
+                  {status === 'conectado' ? 'Conectado' : 'Desconectado'}
+                </span>
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Instância: <strong>{selectedCliente?.instance_name}</strong></p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>Instância: <strong>{selectedCliente?.instance_name}</strong></p>
+
               
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                 <button 
@@ -1296,7 +1454,95 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {/* Novo Card: Onde a IA deve avisar as conversões? */}
+            <div className="glass-panel metric-card" style={{ 
+              marginTop: '1.5rem',
+              height: 'auto',
+              opacity: status === 'conectado' ? 1 : 0.6,
+              pointerEvents: status === 'conectado' ? 'auto' : 'none',
+              transition: 'all 0.3s ease'
+            }}>
+              <div className="metric-label" style={{ marginBottom: '1rem' }}>Onde a IA deve avisar as conversões?</div>
+              
+              <div>
+                <input 
+                  type="text" 
+                  value={aiSettings.notificarEm}
+                  onChange={e => setAiSettings({...aiSettings, notificarEm: e.target.value})}
+                  placeholder="Número (Ex: 5511...) ou selecione um grupo"
+                  style={{ marginBottom: '1rem' }}
+                />
+                
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <button 
+                    className="btn-outline" 
+                    style={{ 
+                      flex: 1, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      gap: '0.5rem',
+                      fontSize: '0.85rem',
+                      padding: '0.6rem 0.5rem',
+                      background: showGroups ? 'rgba(255,255,255,0.05)' : 'transparent'
+                    }} 
+                    onClick={() => showGroups ? setShowGroups(false) : fetchGroups()}
+                  >
+                    {showGroups ? <><X size={16} /> Fechar</> : 'avisar em grupo'}
+                  </button>
+                  
+                  <button 
+                    className="btn-primary" 
+                    style={{ 
+                      flex: 0.8,
+                      fontSize: '0.85rem',
+                      padding: '0.6rem 0.5rem',
+                      background: isSavingNotificar ? 'var(--success)' : 'var(--accent-color)'
+                    }}
+                    onClick={() => saveAISettings(true)}
+                    disabled={isSavingNotificar}
+                  >
+                    {isSavingNotificar ? <span className="spinner"></span> : 'Salvar'}
+                  </button>
+                </div>
+              </div>
+
+              {showGroups && (
+                <div style={{ 
+                  marginTop: '1rem', 
+                  maxHeight: '200px', 
+                  overflowY: 'auto', 
+                  background: 'rgba(0,0,0,0.2)', 
+                  borderRadius: '8px',
+                  padding: '0.5rem',
+                  border: '1px solid var(--border-color)'
+                }}>
+                  {isFetchingGroups ? (
+                    <div style={{ textAlign: 'center', padding: '1rem' }}><span className="spinner"></span> Buscando grupos...</div>
+                  ) : availableGroups.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)' }}>Nenhum grupo encontrado.</div>
+                  ) : (
+                    availableGroups.map((g: any) => (
+                      <div 
+                        key={g.id} 
+                        className="contact-item" 
+                        style={{ padding: '0.75rem', marginBottom: '0.4rem', background: 'rgba(255,255,255,0.03)' }}
+                        onClick={() => {
+                          setAiSettings({...aiSettings, notificarEm: g.id});
+                          setShowGroups(false);
+                        }}
+                      >
+                        <div style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem' }}>{g.subject || g.name}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{g.id}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
+
 
           {/* Coluna da Direita: Ajuste de Atendimento */}
           <div className="glass-panel" style={{ flex: 1, padding: '2rem', animation: 'fadeIn 0.7s ease' }}>
@@ -1353,7 +1599,6 @@ export default function App() {
                 <select 
                   value={aiSettings.objetivo}
                   onChange={e => setAiSettings({...aiSettings, objetivo: e.target.value})}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', color: 'white', border: '1px solid var(--border-color)' }}
                 >
                   <option value="Gerar Leads">Gerar Leads</option>
                   <option value="Agendar Reunião">Agendar Reunião</option>
@@ -1368,7 +1613,6 @@ export default function App() {
                 <select 
                   value={aiSettings.tipoConversao}
                   onChange={e => setAiSettings({...aiSettings, tipoConversao: e.target.value})}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', color: 'white', border: '1px solid var(--border-color)' }}
                 >
                   <option value="Videochamada">Videochamada</option>
                   <option value="Visita Presencial">Visita Presencial</option>
@@ -1715,7 +1959,7 @@ export default function App() {
       <main className="main-content">
         <header className="header-actions">
           <div>
-            <h1>Estoque: {clienteAtual?.nome}</h1>
+            <h1>Estoque: {selectedCliente?.nome}</h1>
             <p className="subtitle">Painel de Controle e Sincronia com RAG</p>
           </div>
           <div style={{ display: 'flex', gap: '1rem' }}>
