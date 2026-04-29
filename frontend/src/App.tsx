@@ -336,6 +336,20 @@ export default function App() {
     telefone: ''
   });
 
+  const evolutionFetch = async (endpoint: string, method: string = 'GET', body?: any) => {
+    try {
+      const response = await fetch('/api/evolution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint, method, body })
+      });
+      return response;
+    } catch (err) {
+      console.error('Erro no evolutionFetch:', err);
+      throw err;
+    }
+  };
+
 
 
   useEffect(() => {
@@ -614,13 +628,7 @@ export default function App() {
   const checkInstancesStatus = async (silent = false) => {
 
     try {
-      const evolutionUrl = import.meta.env.VITE_EVOLUTION_URL || "https://api.storyallday.com"; 
-      const apiKey = import.meta.env.VITE_EVOLUTION_API_KEY; 
-
-
-      const response = await fetch(`${evolutionUrl}/instance/fetchInstances`, {
-        headers: { "apikey": apiKey }
-      });
+      const response = await evolutionFetch('/instance/fetchInstances');
 
       if (response.status === 401) {
         console.error("Erro 401: API Key inválida ou expirada.");
@@ -674,14 +682,9 @@ export default function App() {
 
   const checkInstanceStatus = async (clientId: string, instanceName: string) => {
     if (!instanceName) return;
-    const evolutionUrl = import.meta.env.VITE_EVOLUTION_URL || "https://api.storyallday.com";
-    const apiKey = import.meta.env.VITE_EVOLUTION_API_KEY;
-
     try {
       // 1. Checa Status de Conexão
-      const res = await fetch(`${evolutionUrl}/instance/connectionState/${instanceName}`, {
-        headers: { "apikey": apiKey }
-      });
+      const res = await evolutionFetch(`/instance/connectionState/${instanceName}`);
       const data = await res.json();
       const state = (data.instance?.state || data.state || "").toLowerCase();
       const isConnected = state === 'open' || state === 'connected' || state === 'conectado';
@@ -691,14 +694,7 @@ export default function App() {
       // 2. Se conectado, busca foto de perfil
       if (isConnected) {
         try {
-          const profileRes = await fetch(`${evolutionUrl}/chat/fetchProfilePicture/${instanceName}`, {
-            method: 'POST', // Algumas versões da Evolution pedem POST
-            headers: { 
-              "apikey": apiKey,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ number: "" }) // Busca a foto da própria instância
-          });
+          const profileRes = await evolutionFetch(`/chat/fetchProfilePicture/${instanceName}`, 'POST', { number: "" });
           const profileData = await profileRes.json();
           if (profileData.profilePictureUrl) {
             setInstanceProfiles(prev => ({ ...prev, [clientId]: profileData.profilePictureUrl }));
