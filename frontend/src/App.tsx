@@ -2,13 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from './lib/supabase';
 import { Auth } from './components/Auth';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  LineChart, Line, AreaChart, Area 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  AreaChart, Area 
 } from 'recharts';
 import { 
   LayoutDashboard, MessageSquare, Users, Calendar, TrendingUp,
-  Settings, Plus, Search, Trash2, ExternalLink, LogOut, Send,
-  CheckCircle2, AlertCircle, ChevronRight, Globe, RefreshCw,
+  Trash2, LogOut,
+  CheckCircle2, Globe, RefreshCw,
   QrCode, Copy, Shield, Zap, Smartphone, HelpCircle, X
 } from 'lucide-react';
 
@@ -216,12 +216,7 @@ type ClientStatus = {
   uf?: string;
 };
 
-// Aqui vamos simular que os clientes vêm do banco também, ou manter no Mock por enquanto
-const mockClientes: Cliente[] = [
-  { id: 'cli1', nome: 'Floricultura da Maria' },
-  { id: 'cli2', nome: 'Moto Peças São João' },
-  { id: 'cli3', nome: 'Tech Store' },
-];
+// Aqui vamos simular que os clientes vêm do banco também
 
 export default function App() {
   // Detecção de Rota Externa para QR Code (Deve ser o primeiro check)
@@ -237,8 +232,6 @@ export default function App() {
   const [userEmail, setUserEmail] = useState('');
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [view, setView] = useState<'home' | 'client-hub' | 'inventory' | 'conversas' | 'config'>('home');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
 
   useEffect(() => {
     // Check active sessions and sets the user
@@ -332,7 +325,9 @@ export default function App() {
   const [showGroups, setShowGroups] = useState(false);
 
 
-  const [clientForm, setClientForm] = useState({
+  const [clientForm, setClientForm] = useState<{nome: string, email: string, telefone: string}>({
+    nome: '',
+    email: '',
     telefone: ''
   });
 
@@ -529,7 +524,7 @@ export default function App() {
 
   const fetchMessages = async () => {
     if (!selectedPhone) return;
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('Z_ia_chat_messages')
       .select('*')
       .eq('phone', selectedPhone)
@@ -541,7 +536,7 @@ export default function App() {
 
   const fetchClientStatus = async () => {
     if (!selectedPhone) return;
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('Z_ia_dados_cliente')
       .select('*')
       .eq('telefone', selectedPhone)
@@ -555,7 +550,7 @@ export default function App() {
     if (!selectedPhone || !clientStatus) return;
     const newStatus = clientStatus.atendimento_ia === 'pause' ? 'atendendo' : 'pause';
     
-    const { error } = await supabase
+    await supabase
       .from('Z_ia_dados_cliente')
       .upsert({ 
         telefone: selectedPhone, 
@@ -1056,10 +1051,7 @@ export default function App() {
     setIsFetchingGroups(true);
     setShowGroups(true);
     try {
-      const response = await fetch(`https://api.storyallday.com/group/fetchAllGroups/${selectedCliente.instance_name}?getParticipants=false`, {
-        headers: { "apikey": import.meta.env.VITE_EVOLUTION_API_KEY }
-      });
-      const data = await response.json();
+      const data = await evolutionFetch(`group/fetchAllGroups/${selectedCliente.instance_name}?getParticipants=false`);
       setAvailableGroups(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Erro ao buscar grupos:", err);
@@ -1688,7 +1680,7 @@ export default function App() {
               </div>
                <button 
                 className={`btn-primary ${showSuccessAI ? 'success' : ''}`} 
-                onClick={saveAISettings} 
+                onClick={() => saveAISettings()} 
                 disabled={isSavingAI || showSuccessAI}
                 style={{ 
                   padding: '0.6rem 2rem',
@@ -1704,7 +1696,7 @@ export default function App() {
                 {isSavingAI ? (
                   <><span className="spinner"></span> Salvando...</>
                 ) : showSuccessAI ? (
-                  <><Check size={18} /> Salvo!</>
+                  <><CheckCircle2 size={18} /> Salvo!</>
                 ) : (
                   'Salvar Ajustes'
                 )}
@@ -2010,10 +2002,10 @@ export default function App() {
       // O formato esperado do n8n é uma lista de objetos: { nome, preco, imagem, descricao }
       if (Array.isArray(data)) {
         setScrapedProducts(data);
-        setSelectedScrapedIndices(data.map((_, i) => i)); // Seleciona todos por padrão
+        setSelectedScrapedIndices(data.map((_: any, i: number) => i)); // Seleciona todos por padrão
       } else if (data.produtos) {
         setScrapedProducts(data.produtos);
-        setSelectedScrapedIndices(data.produtos.map((_, i) => i));
+        setSelectedScrapedIndices(data.produtos.map((_: any, i: number) => i));
       } else {
         alert("Nenhum produto encontrado ou erro no formato dos dados.");
       }
