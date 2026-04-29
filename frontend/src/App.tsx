@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from './lib/supabase';
+import { Auth } from './components/Auth';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   LineChart, Line, AreaChart, Area 
@@ -234,9 +235,35 @@ export default function App() {
   // Login State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [view, setView] = useState<'home' | 'client-hub' | 'inventory' | 'conversas' | 'config'>('home');
-  const [email, setEmail] = useState('teste2@teste.com');
-  const [password, setPassword] = useState('teste12345');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  useEffect(() => {
+    // Check active sessions and sets the user
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        setUserEmail(session.user.email);
+        setIsLoggedIn(true);
+      }
+      setIsLoadingAuth(false);
+    });
+
+    // Listen for changes on auth state (logged in, out, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) {
+        setUserEmail(session.user.email);
+        setIsLoggedIn(true);
+      } else {
+        setUserEmail('');
+        setIsLoggedIn(false);
+      }
+      setIsLoadingAuth(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Clientes State
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -771,15 +798,8 @@ export default function App() {
     });
   };
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Simulação de login: aceita qualquer email e senha 'teste12345' para facilitar seus testes multi-usuário
-    if (password === 'teste12345') {
-      setUserEmail(email);
-      setIsLoggedIn(true);
-    } else {
-      alert('Senha incorreta! Use teste12345 para qualquer e-mail.');
-    }
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
   const getStockClass = (qtd: number) => {
@@ -1098,38 +1118,28 @@ export default function App() {
   };
 
 
-  // Login Screen
-  if (!isLoggedIn) {
+  // Loading Screen
+  if (isLoadingAuth) {
     return (
-      <div className="login-container">
-        <form className="glass-panel login-box" onSubmit={handleLogin}>
-          <h2>Acesso ao Painel</h2>
-          <div className="form-group">
-            <label>E-mail</label>
-            <input 
-              type="email" 
-              required
-              value={email} 
-              onChange={e => setEmail(e.target.value)} 
-              placeholder="teste@teste.com" 
-            />
-          </div>
-          <div className="form-group">
-            <label>Senha</label>
-            <input 
-              type="password" 
-              required
-              value={password} 
-              onChange={e => setPassword(e.target.value)} 
-              placeholder="teste12345" 
-            />
-          </div>
-          <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
-            Entrar
-          </button>
-        </form>
+      <div style={{ 
+        height: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: '#09090b',
+        color: 'white'
+      }}>
+        <div className="spinner" style={{ width: '40px', height: '40px' }}></div>
       </div>
     );
+  }
+
+  // Login Screen
+  if (!isLoggedIn) {
+    return <Auth onLoginSuccess={(email) => {
+      setUserEmail(email);
+      setIsLoggedIn(true);
+    }} />;
   }
 
   // Home Screen
@@ -1142,7 +1152,7 @@ export default function App() {
             <p className="subtitle">Bem-vindo ao seu centro de comando Multi-Tenant.</p>
           </div>
           <div style={{ display: 'flex', gap: '1rem' }}>
-            <button className="btn-outline" onClick={() => { setIsLoggedIn(false); setView('home'); }}>
+            <button className="btn-outline" onClick={handleLogout}>
               Sair
             </button>
             <button className="btn-primary" onClick={() => setIsClientModalOpen(true)}>
