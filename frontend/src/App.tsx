@@ -235,8 +235,8 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [view, setView] = useState<'home' | 'client-hub' | 'inventory' | 'conversas' | 'config'>('home');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('teste2@teste.com');
+  const [password, setPassword] = useState('teste12345');
 
   // Clientes State
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -287,16 +287,19 @@ export default function App() {
     nomeAgente: '',
     nomeEmpresa: '',
     saudacao: '',
-    objetivo: 'Gerar Leads',
+    objetivo: 'Agendar Reunião',
     tipoConversao: 'Videochamada',
     papelHumano: '',
     restricoes: [] as string[],
-    notificarEm: ''
+    notificarEm: '',
+    googleCalendarName: ''
   });
 
   const [novaRestricao, setNovaRestricao] = useState('');
   const [isSavingAI, setIsSavingAI] = useState(false);
+  const [showSuccessAI, setShowSuccessAI] = useState(false);
   const [isSavingNotificar, setIsSavingNotificar] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [availableGroups, setAvailableGroups] = useState<any[]>([]);
   const [isFetchingGroups, setIsFetchingGroups] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
@@ -642,6 +645,46 @@ export default function App() {
     }
   };
 
+  const checkInstanceStatus = async (clientId: string, instanceName: string) => {
+    if (!instanceName) return;
+    const evolutionUrl = import.meta.env.VITE_EVOLUTION_URL || "https://api.storyallday.com";
+    const apiKey = import.meta.env.VITE_EVOLUTION_API_KEY;
+
+    try {
+      // 1. Checa Status de Conexão
+      const res = await fetch(`${evolutionUrl}/instance/connectionState/${instanceName}`, {
+        headers: { "apikey": apiKey }
+      });
+      const data = await res.json();
+      const state = (data.instance?.state || data.state || "").toLowerCase();
+      const isConnected = state === 'open' || state === 'connected' || state === 'conectado';
+
+      setInstanceStatuses(prev => ({ ...prev, [clientId]: isConnected ? 'conectado' : 'desconectado' }));
+
+      // 2. Se conectado, busca foto de perfil
+      if (isConnected) {
+        try {
+          const profileRes = await fetch(`${evolutionUrl}/chat/fetchProfilePicture/${instanceName}`, {
+            method: 'POST', // Algumas versões da Evolution pedem POST
+            headers: { 
+              "apikey": apiKey,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ number: "" }) // Busca a foto da própria instância
+          });
+          const profileData = await profileRes.json();
+          if (profileData.profilePictureUrl) {
+            setInstanceProfiles(prev => ({ ...prev, [clientId]: profileData.profilePictureUrl }));
+          }
+        } catch (pErr) {
+          console.error("Erro ao buscar foto de perfil:", pErr);
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao checar status individual:", err);
+    }
+  };
+
 
   const addToast = (message: string, type: 'warning' | 'success') => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -911,11 +954,12 @@ export default function App() {
         nomeAgente: data.nome_agente || '',
         nomeEmpresa: data.nome_empresa || '',
         saudacao: data.saudacao || '',
-        objetivo: data.objetivo || 'Gerar Leads',
+        objetivo: data.objetivo || 'Agendar Reunião',
         tipoConversao: data.tipo_conversao || 'Videochamada',
         papelHumano: data.papel_humano || '',
         restricoes: data.restricoes || [],
-        notificarEm: data.notificar_em || ''
+        notificarEm: data.notificar_em || '',
+        googleCalendarName: data.google_calendar_name || ''
       });
 
 
@@ -925,11 +969,12 @@ export default function App() {
         nomeAgente: '',
         nomeEmpresa: '',
         saudacao: '',
-        objetivo: 'Gerar Leads',
+        objetivo: 'Agendar Reunião',
         tipoConversao: 'Videochamada',
         papelHumano: '',
         restricoes: [],
-        notificarEm: ''
+        notificarEm: '',
+        googleCalendarName: ''
       });
 
 
@@ -951,6 +996,7 @@ export default function App() {
       papel_humano: aiSettings.papelHumano,
       restricoes: aiSettings.restricoes,
       notificar_em: aiSettings.notificarEm,
+      google_calendar_name: aiSettings.googleCalendarName,
       updated_at: new Date().toISOString()
     };
 
@@ -962,9 +1008,14 @@ export default function App() {
     else setIsSavingAI(false);
 
     if (error) {
+      console.error("ERRO AO SALVAR CONFIGS IA:", error);
       addToast("Erro ao salvar configurações: " + error.message, 'warning');
     } else {
       addToast(isNotificar ? "Local de notificação salvo!" : "Configurações da IA salvas!", 'success');
+      if (!isNotificar) {
+        setShowSuccessAI(true);
+        setTimeout(() => setShowSuccessAI(false), 3000);
+      }
     }
   };
 
@@ -999,6 +1050,50 @@ export default function App() {
       addToast("Erro ao buscar grupos", "warning");
     } finally {
       setIsFetchingGroups(false);
+    }
+  };
+
+  const disconnectInstance = async () => {
+    console.log(">>> DEBUG: Botão desconectar clicado!");
+    console.log(">>> DEBUG: selectedClienteId:", selectedClienteId);
+    console.log(">>> DEBUG: selectedCliente object:", selectedCliente);
+    console.log(">>> DEBUG: instance_name:", selectedCliente?.instance_name);
+
+    if (!selectedCliente?.instance_name) {
+      console.error(">>> ERRO: Nome da instância está vazio ou nulo!");
+      addToast("Nome da instância não encontrado!", "warning");
+      return;
+    }
+    
+    setIsDisconnecting(true);
+    console.log(">>> DEBUG: Enviando POST para:", "https://webhook.storyallday.com/webhook/desconecta-instancia");
+
+    try {
+      const response = await fetch("https://webhook.storyallday.com/webhook/desconecta-instancia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instance: selectedCliente.instance_name })
+      });
+
+      console.log(">>> DEBUG: Status da Resposta:", response.status);
+
+      if (response.ok) {
+        addToast("Pedido de desconexão enviado!", "success");
+        // Forçar atualização do status local após um pequeno delay
+        setTimeout(() => {
+          checkInstanceStatus(selectedClienteId!, selectedCliente.instance_name!);
+          setIsDisconnecting(false);
+        }, 3000);
+      } else {
+        const errText = await response.text();
+        console.error("Erro no webhook:", errText);
+        addToast("Erro ao solicitar desconexão", "warning");
+        setIsDisconnecting(false);
+      }
+    } catch (err) {
+      console.error("ERRO FATAL NA REQUISIÇÃO:", err);
+      addToast("Erro de conexão ao tentar desconectar", "warning");
+      setIsDisconnecting(false);
     }
   };
 
@@ -1376,16 +1471,15 @@ export default function App() {
                     src={instanceProfiles[selectedClienteId!]} 
                     alt="WhatsApp Profile" 
                     style={{ 
-                      width: '48px', 
-                      height: '48px', 
+                      width: '40px', 
+                      height: '40px', 
                       borderRadius: '50%', 
                       objectFit: 'cover', 
-                      border: '2px solid #10b981',
-                      boxShadow: '0 0 15px rgba(16, 185, 129, 0.3)'
+                      border: '2px solid #10b981'
                     }}
                   />
                 ) : (
-                   status === 'conectado' ? '🟢' : '🔴'
+                   status === 'conectado' ? <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }}></div> : <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 10px #ef4444' }}></div>
                 )}
                 <span style={{ fontWeight: 700 }}>
                   {status === 'conectado' ? 'Conectado' : 'Desconectado'}
@@ -1395,38 +1489,73 @@ export default function App() {
 
               
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                <button 
-                  className="btn-outline" 
-                  style={{ 
-                    flex: 1, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    gap: '0.5rem',
-                    borderColor: linkCopied ? 'var(--success)' : 'var(--border-color)',
-                    color: linkCopied ? 'var(--success)' : 'var(--text-primary)'
-                  }} 
-                  onClick={copyQRCodeLink}
-                >
-                  {linkCopied ? <><CheckCircle2 size={16} /> Copiado</> : <><Copy size={16} /> Link</>}
-                </button>
-                
-                <button 
-                  className="btn-primary" 
-                  style={{ 
-                    flex: 1.5, 
-                    background: qrCode ? 'rgba(255,255,255,0.05)' : 'var(--accent-color)',
-                    color: qrCode ? 'var(--text-primary)' : 'white',
-                    border: qrCode ? '1px solid var(--border-color)' : 'none',
-                    boxShadow: qrCode ? 'none' : '0 4px 14px 0 rgba(99, 102, 241, 0.39)'
-                  }} 
-                  onClick={toggleQRCode} 
-                  disabled={isGeneratingQr}
-                >
-                  {isGeneratingQr ? <span className="spinner"></span> : (
-                    qrCode ? <><X size={16} style={{marginRight: '8px'}} /> Fechar</> : <><QrCode size={16} style={{marginRight: '8px'}} /> Gerar QR Code</>
-                  )}
-                </button>
+                {status === 'conectado' ? (
+                  <>
+                    <button 
+                      className="btn-outline" 
+                      style={{ 
+                        flex: 1, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        gap: '0.5rem',
+                        borderColor: linkCopied ? 'var(--success)' : 'var(--border-color)',
+                        color: linkCopied ? 'var(--success)' : 'var(--text-primary)'
+                      }} 
+                      onClick={copyQRCodeLink}
+                    >
+                      {linkCopied ? <><CheckCircle2 size={16} /> Copiado</> : <><Copy size={16} /> Link</>}
+                    </button>
+                    <button 
+                      className="btn-outline" 
+                      onClick={disconnectInstance}
+                      disabled={isDisconnecting}
+                      style={{ 
+                        flex: 1.5,
+                        borderColor: '#ef4444', 
+                        color: '#ef4444',
+                        background: 'rgba(239, 68, 68, 0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        opacity: isDisconnecting ? 0.6 : 1
+                      }}
+                    >
+                      {isDisconnecting ? (
+                        <><span className="spinner" style={{ borderColor: '#ef4444', borderTopColor: 'transparent' }}></span> Aguarde...</>
+                      ) : (
+                        <><LogOut size={16} /> Desconectar</>
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button 
+                      className="btn-outline" 
+                      onClick={() => checkInstanceStatus(selectedClienteId!, selectedCliente?.instance_name!)}
+                      style={{ flex: 1 }}
+                    >
+                      🔄 Atualizar
+                    </button>
+                    <button 
+                      className="btn-primary" 
+                      style={{ 
+                        flex: 1.5, 
+                        background: qrCode ? 'rgba(255,255,255,0.05)' : 'var(--accent-color)',
+                        color: qrCode ? 'var(--text-primary)' : 'white',
+                        border: qrCode ? '1px solid var(--border-color)' : 'none',
+                        boxShadow: qrCode ? 'none' : '0 4px 14px 0 rgba(99, 102, 241, 0.39)'
+                      }} 
+                      onClick={toggleQRCode} 
+                      disabled={isGeneratingQr}
+                    >
+                      {isGeneratingQr ? <span className="spinner"></span> : (
+                        qrCode ? <><X size={16} style={{marginRight: '8px'}} /> Fechar</> : <><QrCode size={16} style={{marginRight: '8px'}} /> Gerar QR Code</>
+                      )}
+                    </button>
+                  </>
+                )}
               </div>
 
               {qrCode && (
@@ -1551,13 +1680,28 @@ export default function App() {
                 <Zap color="var(--accent-color)" size={24} />
                 <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Ajuste de Atendimento (IA)</h2>
               </div>
-              <button 
-                className="btn-primary" 
+               <button 
+                className={`btn-primary ${showSuccessAI ? 'success' : ''}`} 
                 onClick={saveAISettings} 
-                disabled={isSavingAI}
-                style={{ padding: '0.6rem 2rem' }}
+                disabled={isSavingAI || showSuccessAI}
+                style={{ 
+                  padding: '0.6rem 2rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  minWidth: '160px',
+                  justifyContent: 'center',
+                  transition: 'all 0.3s ease',
+                  backgroundColor: showSuccessAI ? '#10b981' : undefined
+                }}
               >
-                {isSavingAI ? <span className="spinner"></span> : 'Salvar Ajustes'}
+                {isSavingAI ? (
+                  <><span className="spinner"></span> Salvando...</>
+                ) : showSuccessAI ? (
+                  <><Check size={18} /> Salvo!</>
+                ) : (
+                  'Salvar Ajustes'
+                )}
               </button>
             </div>
 
@@ -1594,32 +1738,87 @@ export default function App() {
                 />
               </div>
 
-              <div className="form-group">
-                <label>4. Objetivo do Agente</label>
-                <select 
-                  value={aiSettings.objetivo}
-                  onChange={e => setAiSettings({...aiSettings, objetivo: e.target.value})}
-                >
-                  <option value="Gerar Leads">Gerar Leads</option>
-                  <option value="Agendar Reunião">Agendar Reunião</option>
-                  <option value="Venda Direta">Venda Direta</option>
-                  <option value="Suporte Técnico">Suporte Técnico</option>
-                  <option value="Qualificação Profunda">Qualificação Profunda</option>
-                </select>
-              </div>
+              {/* Mapeamento de Objetivos -> Conversões */}
+              {(() => {
+                const conversaoOptions: Record<string, string[]> = {
+                  "Agendar Reunião": ["Videochamada", "Visita Presencial", "Ligação Telefônica"],
+                  "Venda Direta": ["Link de Pagamento", "Transferência PIX", "Falar com Vendedor"],
+                  "Suporte Técnico": ["Qualificação e Abertura de Chamado", "Base de Conhecimento", "Falar com Especialista", "Fechamento de Chamado"],
+                  "Qualificação Profunda": ["Formulário de Qualificação", "Encaminhar para SDR", "Análise de Perfil", "Score de Lead"]
+                };
 
-              <div className="form-group">
-                <label>5. Tipo de Conversão</label>
-                <select 
-                  value={aiSettings.tipoConversao}
-                  onChange={e => setAiSettings({...aiSettings, tipoConversao: e.target.value})}
-                >
-                  <option value="Videochamada">Videochamada</option>
-                  <option value="Visita Presencial">Visita Presencial</option>
-                  <option value="Ligação Telefônica">Ligação Telefônica</option>
-                  <option value="Agendamento Calendly">Agendamento Calendly</option>
-                </select>
-              </div>
+                const currentOptions = conversaoOptions[aiSettings.objetivo] || [];
+
+                return (
+                  <>
+                    <div className="form-group">
+                      <label>4. Objetivo do Agente</label>
+                      <select 
+                        value={aiSettings.objetivo}
+                        onChange={e => {
+                          const newObj = e.target.value;
+                          const firstConv = conversaoOptions[newObj]?.[0] || '';
+                          setAiSettings({
+                            ...aiSettings, 
+                            objetivo: newObj,
+                            tipoConversao: firstConv
+                          });
+                        }}
+                      >
+                        <option value="Agendar Reunião">Agendar Reunião</option>
+                        <option value="Venda Direta">Venda Direta</option>
+                        <option value="Suporte Técnico">Suporte Técnico</option>
+                        <option value="Qualificação Profunda">Qualificação Profunda</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label>5. Tipo de Conversão</label>
+                      <select 
+                        value={aiSettings.tipoConversao}
+                        onChange={e => setAiSettings({...aiSettings, tipoConversao: e.target.value})}
+                      >
+                        {currentOptions.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                );
+              })()}
+
+              {/* Bloco Condicional para Google Calendar */}
+              {aiSettings.objetivo === "Agendar Reunião" && (
+                <div style={{ 
+                  gridColumn: 'span 2', 
+                  background: 'rgba(99, 102, 241, 0.05)', 
+                  padding: '1.5rem', 
+                  borderRadius: '16px', 
+                  border: '1px solid rgba(99, 102, 241, 0.2)',
+                  animation: 'fadeIn 0.4s ease'
+                }}>
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                    <Calendar color="var(--accent-color)" size={24} style={{ flexShrink: 0, marginTop: '4px' }} />
+                    <div>
+                      <p style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', lineHeight: '1.5', color: '#f1f5f9' }}>
+                        Para visualizar agendamentos no Google, favor criar uma nova agenda, compartilhar ela com o email 
+                        <strong style={{ color: 'var(--accent-color)', margin: '0 4px' }}>"ismael.matias7622@gmail.com"</strong> 
+                        dando acesso de edição completo, e editar o nome <strong>EXATO</strong> da agenda no campo a seguir:
+                      </p>
+                      
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <input 
+                          type="text" 
+                          value={aiSettings.googleCalendarName}
+                          onChange={e => setAiSettings({...aiSettings, googleCalendarName: e.target.value})}
+                          placeholder="Ex: Agenda Consultas - Loja Centro"
+                          style={{ background: 'rgba(0,0,0,0.2)' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>6. Função/Papel do Humano</label>
@@ -1629,7 +1828,7 @@ export default function App() {
                   onChange={e => setAiSettings({...aiSettings, papelHumano: e.target.value})}
                   placeholder="Ex: Gerente de Vendas, Corretor, Consultor"
                 />
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>A quem a IA deve encaminhar o lead</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>A quem a IA deve encaminhar o lead (ex: agendar reunião com meu Gerente de vendas)</p>
               </div>
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -1640,7 +1839,7 @@ export default function App() {
                     value={novaRestricao}
                     onChange={e => setNovaRestricao(e.target.value)}
                     onKeyPress={e => e.key === 'Enter' && addRestricao()}
-                    placeholder="Adicione uma restrição e pressione Enter"
+                    placeholder="Adicione uma restrição e pressione Enter (ex: não fale de política)"
                     style={{ flex: 1 }}
                   />
                   <button className="btn-outline" onClick={addRestricao} style={{ padding: '0.75rem 1.5rem' }}>Adicionar</button>
