@@ -550,7 +550,7 @@ export default function App() {
     if (!selectedPhone || !clientStatus) return;
     const newStatus = clientStatus.atendimento_ia === 'pause' ? 'atendendo' : 'pause';
     
-    await supabase
+    const { error } = await supabase
       .from('Z_ia_dados_cliente')
       .upsert({ 
         telefone: selectedPhone, 
@@ -954,7 +954,7 @@ export default function App() {
 
   const fetchAISettings = async () => {
     if (!selectedClienteId) return;
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('z_bd_configuracoes_ia')
       .select('*')
       .eq('cliente_id', selectedClienteId)
