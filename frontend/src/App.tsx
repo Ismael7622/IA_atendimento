@@ -311,11 +311,14 @@ export default function App() {
     tipoConversao: 'Videochamada',
     papelHumano: '',
     restricoes: [] as string[],
+    perguntasQualificacao: [] as { text: string, required: boolean }[],
     notificarEm: '',
     googleCalendarName: ''
   });
 
   const [novaRestricao, setNovaRestricao] = useState('');
+  const [novaPergunta, setNovaPergunta] = useState('');
+  const [novaPerguntaRequired, setNovaPerguntaRequired] = useState(false);
   const [isSavingAI, setIsSavingAI] = useState(false);
   const [showSuccessAI, setShowSuccessAI] = useState(false);
   const [isSavingNotificar, setIsSavingNotificar] = useState(false);
@@ -969,6 +972,7 @@ export default function App() {
         tipoConversao: data.tipo_conversao || 'Videochamada',
         papelHumano: data.papel_humano || '',
         restricoes: data.restricoes || [],
+        perguntasQualificacao: data.perguntas_qualificacao || [],
         notificarEm: data.notificar_em || '',
         googleCalendarName: data.google_calendar_name || ''
       });
@@ -984,6 +988,7 @@ export default function App() {
         tipoConversao: 'Videochamada',
         papelHumano: '',
         restricoes: [],
+        perguntasQualificacao: [],
         notificarEm: '',
         googleCalendarName: ''
       });
@@ -1006,6 +1011,7 @@ export default function App() {
       tipo_conversao: aiSettings.tipoConversao,
       papel_humano: aiSettings.papelHumano,
       restricoes: aiSettings.restricoes,
+      perguntas_qualificacao: aiSettings.perguntasQualificacao,
       notificar_em: aiSettings.notificarEm,
       google_calendar_name: aiSettings.googleCalendarName,
       updated_at: new Date().toISOString()
@@ -1043,6 +1049,32 @@ export default function App() {
     setAiSettings(prev => ({
       ...prev,
       restricoes: prev.restricoes.filter((_, i) => i !== index)
+    }));
+  };
+
+  const addPergunta = () => {
+    if (!novaPergunta.trim()) return;
+    setAiSettings(prev => ({
+      ...prev,
+      perguntasQualificacao: [...prev.perguntasQualificacao, { text: novaPergunta.trim(), required: novaPerguntaRequired }]
+    }));
+    setNovaPergunta('');
+    setNovaPerguntaRequired(false);
+  };
+
+  const removePergunta = (index: number) => {
+    setAiSettings(prev => ({
+      ...prev,
+      perguntasQualificacao: prev.perguntasQualificacao.filter((_, i) => i !== index)
+    }));
+  };
+
+  const togglePerguntaRequired = (index: number) => {
+    setAiSettings(prev => ({
+      ...prev,
+      perguntasQualificacao: prev.perguntasQualificacao.map((p, i) => 
+        i === index ? { ...p, required: !p.required } : p
+      )
     }));
   };
 
@@ -1869,6 +1901,129 @@ export default function App() {
                   ))}
                   {aiSettings.restricoes.length === 0 && (
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Nenhuma restrição adicionada.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Seção 8: Perguntas de Qualificação / Dados de Conversão */}
+              <div className="form-group" style={{ 
+                gridColumn: 'span 2', 
+                animation: 'fadeIn 0.5s ease',
+                background: 'rgba(99, 102, 241, 0.03)',
+                padding: '1.5rem',
+                borderRadius: '20px',
+                border: '1px solid rgba(99, 102, 241, 0.1)'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <label style={{ color: 'var(--accent-color)', fontWeight: 700, margin: 0 }}>
+                    8. {aiSettings.objetivo === "Qualificação Profunda" ? "Perguntas de Qualificação" : "Dados Necessários para Conversão"}
+                  </label>
+                </div>
+
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+                  {aiSettings.objetivo === "Qualificação Profunda" 
+                    ? "Defina as perguntas que a IA deve fazer para qualificar o lead antes de encerrar."
+                    : "Defina informações que a IA deve tentar coletar. Marque o 🔒 para tornar a pergunta obrigatória antes da conversão."}
+                </p>
+                
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', alignItems: 'center' }}>
+                  <input 
+                    type="text" 
+                    value={novaPergunta}
+                    onChange={e => setNovaPergunta(e.target.value)}
+                    onKeyPress={e => e.key === 'Enter' && addPergunta()}
+                    placeholder={aiSettings.objetivo === "Qualificação Profunda" ? "Ex: Qual o seu orçamento?" : "Ex: Qual o modelo do carro atual?"}
+                    style={{ flex: 1, background: 'rgba(0,0,0,0.2)' }}
+                  />
+                  
+                  <div 
+                    onClick={() => setNovaPerguntaRequired(!novaPerguntaRequired)}
+                    style={{ 
+                      padding: '0.75rem', 
+                      background: novaPerguntaRequired ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.05)',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      border: `1px solid ${novaPerguntaRequired ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}`,
+                      color: novaPerguntaRequired ? 'var(--accent-color)' : '#94a3b8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title={novaPerguntaRequired ? "Obrigatória" : "Opcional"}
+                  >
+                    {novaPerguntaRequired ? <Shield size={18} /> : <Shield size={18} style={{ opacity: 0.3 }} />}
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{novaPerguntaRequired ? 'Mandatória' : 'Opcional'}</span>
+                  </div>
+
+                  <button className="btn-primary" onClick={addPergunta} style={{ padding: '0.75rem 1.5rem' }}>Adicionar</button>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  {aiSettings.perguntasQualificacao.map((per, idx) => (
+                    <div 
+                      key={idx} 
+                      style={{ 
+                        background: 'rgba(255, 255, 255, 0.03)', 
+                        padding: '1rem', 
+                        borderRadius: '12px', 
+                        border: '1px solid var(--border-color)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '1rem',
+                        animation: 'slideInRight 0.2s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flex: 1 }}>
+                        <span style={{ 
+                          width: '24px', 
+                          height: '24px', 
+                          borderRadius: '50%', 
+                          background: 'var(--accent-color)', 
+                          fontSize: '0.75rem', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          fontWeight: 700,
+                          flexShrink: 0
+                        }}>{idx + 1}</span>
+                        <span style={{ fontSize: '0.9rem' }}>{per.text}</span>
+                      </div>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div 
+                          onClick={() => togglePerguntaRequired(idx)}
+                          style={{ 
+                            cursor: 'pointer',
+                            color: per.required ? 'var(--accent-color)' : '#4b5563',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            padding: '0.3rem 0.6rem',
+                            borderRadius: '8px',
+                            background: per.required ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          {per.required ? <Shield size={14} /> : <Shield size={14} style={{ opacity: 0.3 }} />}
+                          {per.required ? 'OBRIGATÓRIA' : 'OPCIONAL'}
+                        </div>
+
+                        <X 
+                          size={18} 
+                          style={{ cursor: 'pointer', opacity: 0.5, color: '#ef4444' }} 
+                          onClick={() => removePergunta(idx)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  {aiSettings.perguntasQualificacao.length === 0 && (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic', textAlign: 'center', padding: '1rem' }}>
+                      Nenhuma pergunta ou dado configurado.
+                    </p>
                   )}
                 </div>
               </div>
