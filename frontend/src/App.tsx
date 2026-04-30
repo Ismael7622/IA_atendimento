@@ -459,11 +459,9 @@ export default function App() {
     return () => window.removeEventListener('paste', handlePaste);
   }, [isModalOpen]);
 
-
-
   const fetchProdutos = async () => {
     const { data, error } = await supabase
-      .from('z_atendimento_produtos')
+      .from('z_bd_produtos')
       .select('*')
       .eq('tenant_id', selectedClienteId);
     
@@ -838,18 +836,88 @@ export default function App() {
       imagem_url: finalImageUrl
     };
 
+    let savedProduct: any = null;
+    const type = editingId ? 'UPDATE' : 'INSERT';
+
     if (editingId) {
-      const { error } = await supabase.from('z_atendimento_produtos').update(dbPayload).eq('id', editingId);
+      const { data, error } = await supabase
+        .from('z_bd_produtos')
+        .update(dbPayload)
+        .eq('id', editingId)
+        .select()
+        .single();
+
       if (error) {
         setIsUploading(false);
         return alert("Erro ao editar: " + error.message);
       }
+      savedProduct = data;
     } else {
-      const { error } = await supabase.from('z_atendimento_produtos').insert([dbPayload]);
+      const { data, error } = await supabase
+        .from('z_bd_produtos')
+        .insert([dbPayload])
+        .select()
+        .single();
+
       if (error) {
         setIsUploading(false);
         return alert("Erro ao salvar: " + error.message);
       }
+      savedProduct = data;
+    }
+
+    // --- SINCRONIZAÇÃO COM RAG ---
+    try {
+      // 1. Limpa o antigo no RAG
+      await supabase.from('z_atendimento_produtos')
+        .delete()
+        .filter('metadata->>id_ref', 'eq', savedProduct.id);
+
+      // 2. Prepara novo conteúdo RAG
+      const ragContent = `Produto: ${savedProduct.nome} | Descrição: ${savedProduct.descricao || 'Sem descrição'} | Preço: ${formatCurrency(savedProduct.preco)} | Estoque: ${savedProduct.estoque}`;
+      const ragMetadata = {
+        id_ref: savedProduct.id,
+        tenant_id: savedProduct.tenant_id,
+        source: `z_bd_produtos_${savedProduct.id}`,
+        type: 'produto'
+      };
+
+      // 3. Insere no RAG
+      const { data: ragData, error: ragError } = await supabase
+        .from('z_atendimento_produtos')
+        .insert([{ content: ragContent, metadata: ragMetadata }])
+        .select()
+        .single();
+
+      if (!ragError && ragData) {
+        // 4. Dispara Webhook de Embedding conforme formato solicitado
+        await fetch("https://webhook.interfacepsc.com.br/webhook/rag-produtos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([{
+            headers: {
+              "host": "n8n.interfacepsc.com.br",
+              "content-type": "application/json"
+            },
+            params: {},
+            query: {},
+            body: {
+              record: {
+                content: ragData.content,
+                embedding: null,
+                id: ragData.id,
+                metadata: ragData.metadata
+              },
+              table: "ia_busca_disponibilidades",
+              type: type
+            },
+            webhookUrl: "https://webhook.interfacepsc.com.br/webhook/rag-produtos",
+            executionMode: "live"
+          }])
+        });
+      }
+    } catch (ragSyncErr) {
+      console.error("Erro na sincronização RAG/Webhook:", ragSyncErr);
     }
     
     setIsUploading(false);
@@ -2189,7 +2257,7 @@ export default function App() {
         created_at: new Date().toISOString()
       }));
 
-      const { error } = await supabase.from('z_atendimento_produtos').insert(inserts);
+      const { error } = await supabase.from('z_bd_produtos').insert(inserts);
       
       if (error) throw error;
       
