@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'react';
 import { supabase } from './lib/supabase';
 import { Auth } from './components/Auth';
 import { 
@@ -7,10 +7,12 @@ import {
 } from 'recharts';
 import { 
   LayoutDashboard, MessageSquare, Users, Calendar, TrendingUp,
-  Trash2, LogOut,
+  Trash2, LogOut, Plus, ArrowRight, ArrowLeft, User, Mail, Phone, Settings, Package,
   CheckCircle2, Globe, RefreshCw,
-  QrCode, Copy, Shield, Zap, Smartphone, HelpCircle, X
+  QrCode, Copy, Shield, Zap, Smartphone, HelpCircle, X, Trash
 } from 'lucide-react';
+
+const WEBHOOK_BASE = import.meta.env.DEV ? '/webhook-api' : 'https://webhook.storyallday.com';
 
 // --- COMPONENTE DA PÁGINA EXTERNA DE QR CODE ---
 const QRCodeGenPage = ({ instanceName }: { instanceName: string }) => {
@@ -22,7 +24,7 @@ const QRCodeGenPage = ({ instanceName }: { instanceName: string }) => {
     setLoading(true);
     setQrCode(null);
     try {
-      const response = await fetch("https://webhook.storyallday.com/webhook/atualizar-qr-code", {
+      const response = await fetch(`${WEBHOOK_BASE}/webhook/atualizar-qr-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instance: instanceName })
@@ -194,6 +196,7 @@ type Cliente = {
   telefone?: string;
   instance_name?: string;
   created_at?: string;
+  user_id?: string;
 };
 
 type Toast = { id: string; message: string; type: 'warning' | 'success' };
@@ -214,12 +217,11 @@ type ClientStatus = {
   agenda_check?: string;
   situacaofollow?: string;
   uf?: string;
+  tenant_id?: string;
 };
 
-// Aqui vamos simular que os clientes vêm do banco também
-
 export default function App() {
-  // Detecção de Rota Externa para QR Code (Deve ser o primeiro check)
+  // Detecção de Rota Externa para QR Code
   const isQRCodeGen = window.location.pathname.startsWith('/qrcodegen/');
   const qrInstanceFromUrl = isQRCodeGen ? window.location.pathname.split('/').pop() : null;
 
@@ -227,37 +229,13 @@ export default function App() {
     return <QRCodeGenPage instanceName={decodeURIComponent(qrInstanceFromUrl)} />;
   }
 
-  // Login State
+  // --- STATES ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [view, setView] = useState<'home' | 'client-hub' | 'inventory' | 'conversas' | 'config'>('home');
-
-  useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        setUserEmail(session.user.email);
-        setIsLoggedIn(true);
-      }
-      setIsLoadingAuth(false);
-    });
-
-    // Listen for changes on auth state (logged in, out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email) {
-        setUserEmail(session.user.email);
-        setIsLoggedIn(true);
-      } else {
-        setUserEmail('');
-        setIsLoggedIn(false);
-      }
-      setIsLoadingAuth(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
+  const [isLoading, setIsLoading] = useState(false);
+  
   // Clientes State
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isLoadingClientes, setIsLoadingClientes] = useState(false);
@@ -266,19 +244,17 @@ export default function App() {
     clientes.find(c => c.id === selectedClienteId), 
     [clientes, selectedClienteId]
   );
+  
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  
-  const [formState, setFormState] = useState<Partial<Produto>>({
-    nome: '', descricao: '', preco: 0, estoque: 0
-  });
+  const [formState, setFormState] = useState<Partial<Produto>>({ nome: '', descricao: '', preco: 0, estoque: 0 });
 
   // Chat Monitor State
-  const [contacts, setContacts] = useState<{ phone: string, nomewpp: string, last_msg: string, time: string }[]>([]);
+  const [contacts, setContacts] = useState<{ phone: string, nomewpp: string, last_msg: string, time: string, unread?: boolean }[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [clientStatus, setClientStatus] = useState<ClientStatus | null>(null);
@@ -287,35 +263,35 @@ export default function App() {
   const [conversasSubView, setConversasSubView] = useState<'chat' | 'dashboard'>('chat');
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  
+  // Curadoria/RAG State
+  const [showTeachingModal, setShowTeachingModal] = useState(false);
+  const [teachingData, setTeachingData] = useState({ objection: '', answer: '', messageId: '' });
+  const [taughtMessageIds, setTaughtMessageIds] = useState<string[]>([]);
 
-  // Estados para Scraping
-  const [isScrapeModalOpen, setIsScrapeModalOpen] = useState(false);
-  const [scrapeUrl, setScrapeUrl] = useState('');
-  const [isScraping, setIsScraping] = useState(false);
-  const [scrapedProducts, setScrapedProducts] = useState<any[]>([]);
-  const [selectedScrapedIndices, setSelectedScrapedIndices] = useState<number[]>([]);
+  // Instâncias/Evolution State
   const [instanceStatuses, setInstanceStatuses] = useState<Record<string, 'conectado' | 'desconectado'>>({});
   const [instanceProfiles, setInstanceProfiles] = useState<Record<string, string>>({});
-
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [qrTimeLeft, setQrTimeLeft] = useState(30);
 
+  // Scraping State
+  const [isScrapeModalOpen, setIsScrapeModalOpen] = useState(false);
+  const [scrapeUrl, setScrapeUrl] = useState('');
+  const [isScraping, setIsScraping] = useState(false);
+  const [scrapedProducts, setScrapedProducts] = useState<any[]>([]);
+  const [selectedScrapedIndices, setSelectedScrapedIndices] = useState<number[]>([]);
+
   // AI Settings State
   const [aiSettings, setAiSettings] = useState({
-    nomeAgente: '',
-    nomeEmpresa: '',
-    saudacao: '',
-    objetivo: 'Agendar Reunião',
-    tipoConversao: 'Videochamada',
-    papelHumano: '',
-    restricoes: [] as string[],
-    perguntasQualificacao: [] as { text: string, required: boolean }[],
-    notificarEm: '',
-    googleCalendarName: ''
+    nomeAgente: '', nomeEmpresa: '', saudacao: '', objetivo: 'Agendar Reunião', tipoConversao: 'Videochamada',
+    papelHumano: '', restricoes: [] as string[], perguntasQualificacao: [] as { text: string, required: boolean }[],
+    notificarEm: '', googleCalendarName: ''
   });
-
   const [novaRestricao, setNovaRestricao] = useState('');
   const [novaPergunta, setNovaPergunta] = useState('');
   const [novaPerguntaRequired, setNovaPerguntaRequired] = useState(false);
@@ -327,37 +303,37 @@ export default function App() {
   const [isFetchingGroups, setIsFetchingGroups] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
 
+  // Client Form
+  const [clientForm, setClientForm] = useState<{nome: string, email: string, telefone: string}>({ nome: '', email: '', telefone: '' });
 
-  const [clientForm, setClientForm] = useState<{nome: string, email: string, telefone: string}>({
-    nome: '',
-    email: '',
-    telefone: ''
-  });
-
-  const evolutionFetch = async (endpoint: string, method: string = 'GET', body?: any) => {
-    try {
-      const response = await fetch('/api/evolution', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, method, body })
-      });
-      return response;
-    } catch (err) {
-      console.error('Erro no evolutionFetch:', err);
-      throw err;
-    }
-  };
-
-
+  // --- EFFECTS ---
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        setUserEmail(session.user.email);
+        setIsLoggedIn(true);
+      }
+      setIsLoadingAuth(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) {
+        setUserEmail(session.user.email);
+        setIsLoggedIn(true);
+      } else {
+        setUserEmail('');
+        setIsLoggedIn(false);
+      }
+      setIsLoadingAuth(false);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (isLoggedIn) fetchClientes();
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (view === 'inventory' && selectedClienteId) {
-      fetchProdutos();
-    }
+    if (view === 'inventory' && selectedClienteId) fetchProdutos();
     if (view === 'conversas' && selectedClienteId) {
       fetchContacts();
       fetchDashboardData();
@@ -369,46 +345,35 @@ export default function App() {
     }
   }, [selectedClienteId, view]);
 
-  // Background Check para Instâncias
   useEffect(() => {
-    if (!isLoggedIn) return;
-    
-    const interval = setInterval(() => {
-      checkInstancesStatus(true); // true = silent check para notificações
-    }, 60000); // A cada 1 minuto
-
-
-    checkInstancesStatus(true);
-    return () => clearInterval(interval);
-  }, [isLoggedIn, clientes]);
-
-  useEffect(() => {
-    if (selectedClienteId && view === 'config') {
-      fetchAISettings();
-    }
-  }, [selectedClienteId, view]);
+    if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   useEffect(() => {
     if (view === 'conversas' && selectedPhone) {
       fetchMessages();
       fetchClientStatus();
+      setContacts(prev => prev.map(c => c.phone === selectedPhone ? { ...c, unread: false } : c));
       
-      // Real-time subscription
       const channel = supabase
         .channel(`chat-${selectedPhone}`)
         .on('postgres_changes', 
-          { event: 'INSERT', schema: 'public', table: 'Z_ia_chat_messages', filter: `phone=eq.${selectedPhone}` },
+          { event: 'INSERT', schema: 'public', table: 'z_ia_chat_messages', filter: `phone=eq.${selectedPhone}` },
           (payload) => {
-            setMessages(prev => [...prev, payload.new as ChatMessage]);
+            const newMsg = payload.new as ChatMessage;
+            setMessages(prev => [...prev, newMsg]);
+            setContacts(prev => prev.map(c => c.phone === selectedPhone ? {
+              ...c,
+              last_msg: newMsg.user_message || newMsg.bot_message || c.last_msg,
+              time: new Date(newMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            } : c));
           }
         )
         .subscribe();
-      
       return () => { supabase.removeChannel(channel); };
     }
   }, [selectedPhone, view]);
 
-  // Timer para QR Code na aba Admin
   useEffect(() => {
     let timer: any;
     if (qrCode && qrTimeLeft > 0 && view === 'config') {
@@ -419,18 +384,48 @@ export default function App() {
     return () => clearInterval(timer);
   }, [qrCode, qrTimeLeft, view]);
 
+  // --- FUNCTIONS ---
+  const evolutionFetch = async (endpoint: string, method: string = 'GET', body?: any) => {
+    try {
+      if (import.meta.env.DEV) {
+        const baseUrl = import.meta.env.VITE_EVOLUTION_URL || "https://api.storyallday.com";
+        const apiKey = import.meta.env.VITE_EVOLUTION_API_KEY;
+        const response = await fetch(`${baseUrl}${endpoint}`, {
+          method,
+          headers: { "apikey": apiKey || "", "Content-Type": "application/json" },
+          body: method !== 'GET' ? JSON.stringify(body) : undefined
+        });
+        return response;
+      } else {
+        const response = await fetch('/api/evolution', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint, method, body })
+        });
+        return response;
+      }
+    } catch (err) {
+      console.error('Erro no evolutionFetch:', err);
+      throw err;
+    }
+  };
+
+  const addToast = (message: string, type: 'warning' | 'success') => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000);
+  };
+
   const fetchClientes = async () => {
     if (!userEmail) return;
     setIsLoadingClientes(true);
     const { data, error } = await supabase
       .from('z_bd_atendimento_clientes')
       .select('*')
-      .eq('user_id', userEmail) // Filtro multi-usuário: busca apenas clientes deste usuário
+      .eq('user_id', userEmail)
       .order('nome', { ascending: true });
-    
     if (error) {
-      console.error('Erro ao buscar clientes:', error);
-      alert('Erro ao carregar clientes do banco: ' + error.message);
+      console.error(error);
       setIsLoadingClientes(false);
       return;
     }
@@ -438,111 +433,89 @@ export default function App() {
     setIsLoadingClientes(false);
   };
 
-  useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      if (!isModalOpen) return;
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
-          const file = items[i].getAsFile();
-          if (file) {
-            // Se colar uma imagem, definimos ela no state
-            setImageFile(file);
-          }
-          break;
-        }
-      }
-    };
-    
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-  }, [isModalOpen]);
-
   const fetchProdutos = async () => {
     const { data, error } = await supabase
       .from('z_bd_produtos')
       .select('*')
       .eq('tenant_id', selectedClienteId);
-    
-    if (error) {
-      console.error('Erro ao buscar produtos:', error);
-      return;
-    }
-    
+    if (error) return console.error(error);
     if (data) {
-      const formatted: Produto[] = data.map(dbItem => ({
-        id: dbItem.id,
-        clienteId: dbItem.tenant_id,
-        nome: dbItem.nome,
-        descricao: dbItem.descricao,
-        preco: Number(dbItem.preco),
-        estoque: Number(dbItem.estoque),
-        imagemUrl: dbItem.imagem_url
-      }));
-      setProdutos(formatted);
+      setProdutos(data.map(dbItem => ({
+        id: dbItem.id, clienteId: dbItem.tenant_id, nome: dbItem.nome,
+        descricao: dbItem.descricao, preco: Number(dbItem.preco),
+        estoque: Number(dbItem.estoque), imagemUrl: dbItem.imagem_url
+      })));
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
-
-  // Chat Functions
-  const fetchContacts = async () => {
+  const fetchContacts = useCallback(async () => {
+    if (!selectedClienteId) return;
     setIsLoadingChat(true);
-    // Busca as últimas mensagens agrupadas por telefone para este tenant
-    const { data, error } = await supabase
-      .from('Z_ia_chat_messages')
-      .select('phone, nomewpp, user_message, bot_message, created_at')
+    const { data: chats, error: chatsError } = await supabase
+      .from('z_ia_chats')
+      .select('phone, updated_at')
       .eq('tenant_id', selectedClienteId)
-      .order('created_at', { ascending: false });
+      .order('updated_at', { ascending: false });
 
-    if (error) {
-      console.error('Erro contatos:', error);
+    if (chatsError) {
       setIsLoadingChat(false);
       return;
     }
 
-    // Agrupamento manual para pegar a última de cada um
-    const unique: any = {};
-    data?.forEach(m => {
-      if (!unique[m.phone]) {
-        unique[m.phone] = {
-          phone: m.phone,
-          nomewpp: m.nomewpp || 'Cliente',
-          last_msg: m.user_message || m.bot_message || '...',
-          time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-      }
+    const { data: messages } = await supabase
+      .from('z_ia_chat_messages')
+      .select('phone, nomewpp, user_message, bot_message, created_at')
+      .eq('tenant_id', selectedClienteId)
+      .order('created_at', { ascending: false })
+      .limit(1000);
+
+    const unique: any[] = [];
+    chats?.forEach(chat => {
+      const lastMsg = messages?.find(m => m.phone === chat.phone);
+      unique.push({
+        phone: chat.phone,
+        nomewpp: lastMsg?.nomewpp || 'Cliente',
+        last_msg: lastMsg?.bot_message || lastMsg?.user_message || 'Iniciando conversa...',
+        time: lastMsg ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 
+                     new Date(chat.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
     });
-    setContacts(Object.values(unique));
+    setContacts(unique);
     setIsLoadingChat(false);
-  };
+  }, [selectedClienteId]);
 
   const fetchMessages = async () => {
     if (!selectedPhone) return;
     const { data } = await supabase
-      .from('Z_ia_chat_messages')
+      .from('z_ia_chat_messages')
       .select('*')
       .eq('phone', selectedPhone)
       .eq('tenant_id', selectedClienteId)
       .order('created_at', { ascending: true });
 
-    if (data) setMessages(data);
+    if (data) {
+      setMessages(data);
+      // Busca quais dessas mensagens já foram ensinadas no RAG
+      const { data: taught } = await supabase
+        .from('z_atendimento_conhecimento')
+        .select('metadata')
+        .eq('metadata->>tenant_id', selectedClienteId)
+        .eq('metadata->>source', 'curadoria_chat');
+      
+      if (taught) {
+        const ids = taught.map((t: any) => t.metadata.id_ref).filter(Boolean);
+        setTaughtMessageIds(ids);
+      }
+    }
   };
 
   const fetchClientStatus = async () => {
     if (!selectedPhone) return;
     const { data } = await supabase
-      .from('Z_ia_dados_cliente')
+      .from('z_ia_dados_cliente')
       .select('*')
       .eq('telefone', selectedPhone)
       .single();
-    
     if (data) setClientStatus(data);
     else setClientStatus({ telefone: selectedPhone, atendimento_ia: 'atendendo', tenant_id: selectedClienteId } as any);
   };
@@ -550,61 +523,91 @@ export default function App() {
   const toggleIAPause = async () => {
     if (!selectedPhone || !clientStatus) return;
     const newStatus = clientStatus.atendimento_ia === 'pause' ? 'atendendo' : 'pause';
-    
     const { error } = await supabase
-      .from('Z_ia_dados_cliente')
+      .from('z_ia_dados_cliente')
       .upsert({ 
-        telefone: selectedPhone, 
-        atendimento_ia: newStatus,
-        tenant_id: selectedClienteId,
-        updated_at: new Date().toISOString()
+        telefone: selectedPhone, atendimento_ia: newStatus,
+        tenant_id: selectedClienteId, updated_at: new Date().toISOString()
       });
-
     if (!error) setClientStatus({ ...clientStatus, atendimento_ia: newStatus });
   };
 
   const sendManualMessage = async () => {
     if (!manualMsg || !selectedPhone) return;
-    
-    // 1. Salva no banco (o webhook do n8n faria o envio real)
     const { error } = await supabase
-      .from('Z_ia_chat_messages')
+      .from('z_ia_chat_messages')
       .insert([{
-        tenant_id: selectedClienteId,
-        phone: selectedPhone,
-        bot_message: manualMsg,
-        nomewpp: contacts.find(c => c.phone === selectedPhone)?.nomewpp
+        tenant_id: selectedClienteId, phone: selectedPhone,
+        bot_message: manualMsg, nomewpp: contacts.find(c => c.phone === selectedPhone)?.nomewpp
       }]);
-
     if (!error) {
       setManualMsg('');
-      // 2. Pausa a IA automaticamente ao intervir
       if (clientStatus?.atendimento_ia !== 'pause') toggleIAPause();
     }
   };
 
+  const saveTeaching = async () => {
+    if (!teachingData.objection || !teachingData.answer) return;
+    setIsLoading(true);
+    
+    // Garantir que o id_ref seja uma string única
+    const idRef = (teachingData.messageId || `teach_${Date.now()}`).toString();
+    const ragContent = `DÚVIDA/OBJEÇÃO: ${teachingData.objection} | RESPOSTA IDEAL: ${teachingData.answer}`;
+    
+    // Metadata limpo conforme o guia, sem duplicar o tenant_id que já vai no topo
+    const ragMetadata = {
+      id_ref: idRef,
+      tenant_id: selectedClienteId,
+      source: 'curadoria_chat',
+      tipo: 'objecao'
+    };
+
+    const { data: ragData, error } = await supabase
+      .from('z_atendimento_conhecimento')
+      .insert([{ 
+        content: ragContent, 
+        metadata: ragMetadata 
+      }])
+      .select().single();
+
+    if (error) {
+      console.error('Erro ao salvar no RAG:', error);
+      alert(`Erro ao salvar ensinamento: ${error.message}`);
+    } else {
+      // Gatilho do webhook de embedding
+      fetch(`${WEBHOOK_BASE}/webhook/rag-disponibilidades`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{
+          body: { record: ragData, type: 'INSERT' }
+        }])
+      }).catch(err => console.error('Erro no Webhook:', err));
+
+      setTaughtMessageIds(prev => [...prev, idRef]);
+      setShowTeachingModal(false);
+      setTeachingData({ objection: '', answer: '', messageId: '' });
+      addToast('IA ensinada com sucesso!', 'success');
+    }
+    setIsLoading(false);
+  };
+
   const fetchDashboardData = async () => {
-    // 1. Busca todas as mensagens para este tenant
     const { data: messages, error: mError } = await supabase
-      .from('Z_ia_chat_messages')
+      .from('z_ia_chat_messages')
       .select('phone, user_message, bot_message, created_at')
       .eq('tenant_id', selectedClienteId);
 
-    // 2. Busca status dos clientes
     const { data: statuses, error: sError } = await supabase
-      .from('Z_ia_dados_cliente')
+      .from('z_ia_dados_cliente')
       .select('telefone, agenda_check')
       .eq('tenant_id', selectedClienteId);
 
     if (mError || sError) return;
-
-    // Processamento de métricas
     const phones = new Set(messages.map(m => m.phone));
     const respondidas = new Set(messages.filter(m => m.user_message).map(m => m.phone));
     const iniciadas = new Set(messages.filter(m => m.bot_message).map(m => m.phone));
     const agendamentos = statuses?.filter(s => s.agenda_check).length || 0;
 
-    // Dados para o gráfico (volume diário)
     const daily: any = {};
     messages.forEach(m => {
       const date = new Date(m.created_at).toLocaleDateString();
@@ -622,454 +625,42 @@ export default function App() {
   };
 
   const checkInstancesStatus = async (silent = false) => {
-
     try {
       const response = await evolutionFetch('/instance/fetchInstances');
-
-      if (response.status === 401) {
-        console.error("Erro 401: API Key inválida ou expirada.");
-        addToast("Erro de Autenticação na API (Key inválida)", "warning");
-        return;
-      }
-
-
       const rawData = await response.json();
-      
-      // A API pode retornar a lista diretamente ou dentro de um objeto { instances: [] }
       const data = Array.isArray(rawData) ? rawData : (rawData.instances || []);
-      
-      if (!Array.isArray(data)) {
-        console.error("Formato de dados inesperado da API:", rawData);
-        return;
-      }
-
       const statuses: Record<string, 'conectado' | 'desconectado'> = {};
       const profiles: Record<string, string> = {};
-      const disconnectedClients: string[] = [];
 
       clientes.forEach(client => {
         if (!client.instance_name) return;
-        const instance = data.find((i: any) => 
-          i.name === client.instance_name || 
-          i.instanceName === client.instance_name ||
-          i.instance?.name === client.instance_name
-        );
-        
-        const state = (instance?.connectionStatus || instance?.status || instance?.instance?.state || instance?.state || "").toLowerCase();
+        const instance = data.find((i: any) => i.name === client.instance_name || i.instanceName === client.instance_name);
+        const state = (instance?.connectionStatus || instance?.status || instance?.instance?.state || "").toLowerCase();
         const isConnected = state === 'open' || state === 'connected' || state === 'conectado';
-          
         statuses[client.id] = isConnected ? 'conectado' : 'desconectado';
-
-        if (isConnected && (instance?.profilePictureUrl || instance?.instance?.profilePictureUrl)) {
-          profiles[client.id] = instance?.profilePictureUrl || instance?.instance?.profilePictureUrl;
-        }
-
-        if (!isConnected && silent) {
-          disconnectedClients.push(client.nome);
-        }
+        if (isConnected && instance?.profilePictureUrl) profiles[client.id] = instance.profilePictureUrl;
       });
-
       setInstanceStatuses(statuses);
       setInstanceProfiles(profiles);
     } catch (err) {
-      console.error("Erro ao checar instâncias:", err);
+      console.error(err);
     }
   };
 
   const checkInstanceStatus = async (clientId: string, instanceName: string) => {
     if (!instanceName) return;
     try {
-      // 1. Checa Status de Conexão
       const res = await evolutionFetch(`/instance/connectionState/${instanceName}`);
       const data = await res.json();
       const state = (data.instance?.state || data.state || "").toLowerCase();
       const isConnected = state === 'open' || state === 'connected' || state === 'conectado';
-
       setInstanceStatuses(prev => ({ ...prev, [clientId]: isConnected ? 'conectado' : 'desconectado' }));
-
-      // 2. Se conectado, busca foto de perfil
-      if (isConnected) {
-        try {
-          const profileRes = await evolutionFetch(`/chat/fetchProfilePicture/${instanceName}`, 'POST', { number: "" });
-          const profileData = await profileRes.json();
-          if (profileData.profilePictureUrl) {
-            setInstanceProfiles(prev => ({ ...prev, [clientId]: profileData.profilePictureUrl }));
-          }
-        } catch (pErr) {
-          console.error("Erro ao buscar foto de perfil:", pErr);
-        }
-      }
-    } catch (err) {
-      console.error("Erro ao checar status individual:", err);
-    }
-  };
-
-
-  const addToast = (message: string, type: 'warning' | 'success') => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
-  };
-
-  const copyQRCodeLink = () => {
-    if (!selectedCliente) return;
-    const link = `${window.location.origin}/qrcodegen/${selectedCliente.instance_name}`;
-    navigator.clipboard.writeText(link);
-    setLinkCopied(true);
-    addToast("Link copiado!", "success");
-    setTimeout(() => setLinkCopied(false), 3000);
-  };
-
-  const toggleQRCode = () => {
-    if (qrCode) {
-      setQrCode(null);
-    } else {
-      generateQRCode();
-    }
-  };
-
-  const generateQRCode = async () => {
-    if (!selectedCliente?.instance_name) return alert("Instância não configurada.");
-    
-    setIsGeneratingQr(true);
-    setQrCode(null);
-
-    try {
-      const response = await fetch("https://webhook.storyallday.com/webhook/atualizar-qr-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          instance: selectedCliente.instance_name,
-          events: ["MESSAGES_UPSERT"],
-          ignore_events: ["CHATS_UPSERT"],
-          webhook_url: "https://webhook.storyallday.com/webhook/recebe-msg"
-        })
-      });
-
-
-      
-      const contentType = response.headers.get("content-type");
-
-      if (contentType && (contentType.includes("image") || contentType.includes("octet-stream"))) {
-        const blob = await response.blob();
-        // Revoga URL anterior se existir
-        if (qrCode && qrCode.startsWith('blob:')) URL.revokeObjectURL(qrCode);
-        
-        const imageUrl = URL.createObjectURL(blob);
-        setQrCode(imageUrl);
-        setQrTimeLeft(30); // Reseta timer no admin
-        addToast("QR Code recebido!", "success");
-      } else {
-        const data = await response.json();
-        const code = data.qrcode || data.base64 || data.code || (typeof data === 'string' ? data : null);
-        
-        if (code) {
-          setQrCode(code);
-          setQrTimeLeft(30); // Reseta timer no admin
-          addToast("QR Code gerado! Escaneie para conectar.", "success");
-        } else {
-          alert("Erro ao receber QR Code. Verifique o fluxo.");
-        }
-      }
-    } catch (err) {
-      console.error("Erro ao gerar QR Code:", err);
-      alert("Falha na requisição do QR Code.");
-    } finally {
-      setIsGeneratingQr(false);
-    }
-  };
-
-  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, "");
-    const numericValue = parseInt(value, 10) / 100;
-    setFormState({
-      ...formState,
-      preco: isNaN(numericValue) ? 0 : numericValue
-    });
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
-
-  const getStockClass = (qtd: number) => {
-    if (qtd === 0) return 'stock-out';
-    if (qtd < 5) return 'stock-low';
-    return 'stock-high';
-  };
-
-  const saveProduct = async () => {
-    if (!formState.nome) return alert("O nome do produto é obrigatório!");
-    
-    setIsUploading(true);
-    let finalImageUrl = formState.imagemUrl || null;
-
-    if (imageFile) {
-      const fileExt = imageFile.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `${selectedClienteId}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('produtos_cliente')
-        .upload(filePath, imageFile);
-      
-      if (uploadError) {
-        setIsUploading(false);
-        return alert("Erro no upload da imagem: " + uploadError.message);
-      }
-      
-      const { data: publicUrlData } = supabase.storage
-        .from('produtos_cliente')
-        .getPublicUrl(filePath);
-        
-      finalImageUrl = publicUrlData.publicUrl;
-    }
-
-    const dbPayload = {
-      tenant_id: selectedClienteId,
-      nome: formState.nome,
-      descricao: formState.descricao || '',
-      preco: formState.preco || 0,
-      estoque: formState.estoque || 0,
-      imagem_url: finalImageUrl
-    };
-
-    let savedProduct: any = null;
-    const type = editingId ? 'UPDATE' : 'INSERT';
-
-    if (editingId) {
-      const { data, error } = await supabase
-        .from('z_bd_produtos')
-        .update(dbPayload)
-        .eq('id', editingId)
-        .select()
-        .single();
-
-      if (error) {
-        setIsUploading(false);
-        return alert("Erro ao editar: " + error.message);
-      }
-      savedProduct = data;
-    } else {
-      const { data, error } = await supabase
-        .from('z_bd_produtos')
-        .insert([dbPayload])
-        .select()
-        .single();
-
-      if (error) {
-        setIsUploading(false);
-        return alert("Erro ao salvar: " + error.message);
-      }
-      savedProduct = data;
-    }
-
-    // --- SINCRONIZAÇÃO COM RAG ---
-    try {
-      // 1. Limpa o antigo no RAG
-      await supabase.from('z_atendimento_conhecimento')
-        .delete()
-        .filter('metadata->>id_ref', 'eq', savedProduct.id);
-
-      // 2. Prepara novo conteúdo RAG
-      const ragContent = `Produto: ${savedProduct.nome} | Descrição: ${savedProduct.descricao || 'Sem descrição'} | Preço: ${formatCurrency(savedProduct.preco)} | Estoque: ${savedProduct.estoque}`;
-      const ragMetadata = {
-        id_ref: savedProduct.id,
-        tenant_id: savedProduct.tenant_id,
-        source: `z_bd_produtos_${savedProduct.id}`,
-        tipo: 'produto'
-      };
-
-      // 3. Insere no RAG
-      const { data: ragData, error: ragError } = await supabase
-        .from('z_atendimento_conhecimento')
-        .insert([{ content: ragContent, metadata: ragMetadata }])
-        .select()
-        .single();
-
-      if (!ragError && ragData) {
-        // 4. Dispara Webhook de Embedding conforme formato solicitado
-        await fetch("https://webhook.storyallday.com/webhook/rag-disponibilidades", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify([{
-            headers: {
-              "host": "n8n.storyallday.com",
-              "content-type": "application/json"
-            },
-            params: {},
-            query: {},
-            body: {
-              record: {
-                content: ragData.content,
-                embedding: null,
-                id: ragData.id,
-                metadata: ragData.metadata
-              },
-              table: "ia_busca_disponibilidades",
-              type: type
-            },
-            webhookUrl: "https://webhook.interfacepsc.com.br/webhook/rag-produtos",
-            executionMode: "live"
-          }])
-        });
-      }
-    } catch (ragSyncErr) {
-      console.error("Erro na sincronização RAG/Webhook:", ragSyncErr);
-    }
-    
-    setIsUploading(false);
-    setIsModalOpen(false);
-    fetchProdutos();
-  };
-
-  const openNewProduct = () => {
-    setEditingId(null);
-    setFormState({ nome: '', descricao: '', preco: 0, estoque: 0 });
-    setImageFile(null);
-    setIsModalOpen(true);
-  };
-
-  const openEditProduct = (prod: Produto) => {
-    setEditingId(prod.id);
-    setFormState({ ...prod });
-    setImageFile(null);
-    setIsModalOpen(true);
-  };
-
-  const saveClient = async () => {
-    if (!clientForm.nome) return alert("Nome é obrigatório");
-    
-    const toSnakeCase = (str: string) => 
-      str.toLowerCase()
-         .normalize("NFD")
-         .replace(/[\u0300-\u036f]/g, "") 
-         .trim()
-         .replace(/\s+/g, '_')
-         .replace(/[^\w-]+/g, '')
-         .replace(/--+/g, '_');
-
-    const instanceName = `${userEmail}-${toSnakeCase(clientForm.nome)}`;
-    const newId = 'cust_' + Date.now().toString(36);
-    
-    // 1. Salva no Banco de Dados (Tabela de Clientes)
-    const { error } = await supabase
-      .from('z_bd_atendimento_clientes')
-      .insert([{ 
-        ...clientForm, 
-        id: newId,
-        instance_name: instanceName, 
-        user_id: userEmail 
-      }]);
-
-    if (error) return alert("Erro ao salvar cliente: " + error.message);
-
-    // 2. Cria a linha exclusiva na tabela de configurações da IA (Z minúsculo)
-    // Isso garante a persistência desde o primeiro momento
-    const { error: configError } = await supabase
-      .from('z_bd_configuracoes_ia')
-      .insert([{ 
-        cliente_id: newId,
-        updated_at: new Date().toISOString()
-      }]);
-
-    if (configError) console.error("Erro ao criar linha de config IA:", configError);
-
-    // 3. Dispara o Webhook de Instância na Evolution
-    try {
-      await fetch("https://webhook.storyallday.com/webhook/gerar-instancia", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          instance: instanceName,
-          events: ["MESSAGES_UPSERT"],
-          ignore_events: ["CHATS_UPSERT"],
-          webhook_url: "https://webhook.storyallday.com/webhook/recebe-msg"
-        })
-      });
-      console.log("Webhook de instância disparado!");
-    } catch (whError) {
-      console.error("Erro ao disparar webhook:", whError);
-    }
-
-    setClientForm({ nome: '', email: '', telefone: '' });
-    setIsClientModalOpen(false);
-    fetchClientes();
-  };
-
-  const deleteClient = async (e: React.MouseEvent, clientId: string, clientName: string) => {
-    e.stopPropagation(); // Evita abrir o hub ao clicar no botão de excluir
-    
-    if (!window.confirm(`Tem certeza que deseja excluir o cliente "${clientName}"? Todos os dados vinculados a este cliente serão perdidos.`)) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('z_bd_atendimento_clientes')
-        .delete()
-        .eq('id', clientId);
-
-      if (error) throw error;
-
-      addToast(`Cliente "${clientName}" removido com sucesso!`, 'success');
-      fetchClientes();
-    } catch (err: any) {
-      console.error("Erro ao excluir cliente:", err);
-      addToast("Erro ao excluir cliente: " + err.message, 'warning');
-    }
-  };
-
-
-  const fetchAISettings = async () => {
-    if (!selectedClienteId) return;
-    const { data } = await supabase
-      .from('z_bd_configuracoes_ia')
-      .select('*')
-      .eq('cliente_id', selectedClienteId)
-      .single();
-
-    if (data) {
-      setAiSettings({
-        nomeAgente: data.nome_agente || '',
-        nomeEmpresa: data.nome_empresa || '',
-        saudacao: data.saudacao || '',
-        objetivo: data.objetivo || 'Agendar Reunião',
-        tipoConversao: data.tipo_conversao || 'Videochamada',
-        papelHumano: data.papel_humano || '',
-        restricoes: data.restricoes || [],
-        perguntasQualificacao: data.perguntas_qualificacao || [],
-        notificarEm: data.notificar_em || '',
-        googleCalendarName: data.google_calendar_name || ''
-      });
-
-
-    } else {
-      // Se não existir registro, resetamos para o padrão
-      setAiSettings({
-        nomeAgente: '',
-        nomeEmpresa: '',
-        saudacao: '',
-        objetivo: 'Agendar Reunião',
-        tipoConversao: 'Videochamada',
-        papelHumano: '',
-        restricoes: [],
-        perguntasQualificacao: [],
-        notificarEm: '',
-        googleCalendarName: ''
-      });
-
-
-    }
+    } catch (err) { console.error(err); }
   };
 
   const saveAISettings = async (isNotificar = false) => {
     if (!selectedClienteId) return;
-    if (isNotificar) setIsSavingNotificar(true);
-    else setIsSavingAI(true);
-
+    if (isNotificar) setIsSavingNotificar(true); else setIsSavingAI(true);
     const dbPayload = {
       cliente_id: selectedClienteId,
       nome_agente: aiSettings.nomeAgente,
@@ -1084,66 +675,45 @@ export default function App() {
       google_calendar_name: aiSettings.googleCalendarName,
       updated_at: new Date().toISOString()
     };
-
-    const { error } = await supabase
-      .from('z_bd_configuracoes_ia')
-      .upsert(dbPayload, { onConflict: 'cliente_id' });
-
-    if (isNotificar) setIsSavingNotificar(false);
-    else setIsSavingAI(false);
-
-    if (error) {
-      console.error("ERRO AO SALVAR CONFIGS IA:", error);
-      addToast("Erro ao salvar configurações: " + error.message, 'warning');
-    } else {
-      addToast(isNotificar ? "Local de notificação salvo!" : "Configurações da IA salvas!", 'success');
-      if (!isNotificar) {
-        setShowSuccessAI(true);
-        setTimeout(() => setShowSuccessAI(false), 3000);
-      }
+    const { error } = await supabase.from('z_bd_configuracoes_ia').upsert(dbPayload, { onConflict: 'cliente_id' });
+    if (isNotificar) setIsSavingNotificar(false); else setIsSavingAI(false);
+    if (!error) {
+      addToast("Salvo com sucesso!", 'success');
+      if (!isNotificar) { setShowSuccessAI(true); setTimeout(() => setShowSuccessAI(false), 3000); }
     }
   };
 
-  const addRestricao = () => {
-    if (!novaRestricao.trim()) return;
-    setAiSettings(prev => ({
-      ...prev,
-      restricoes: [...prev.restricoes, novaRestricao.trim()]
-    }));
-    setNovaRestricao('');
+  const fetchAISettings = async () => {
+    if (!selectedClienteId) return;
+    const { data } = await supabase.from('z_bd_configuracoes_ia').select('*').eq('cliente_id', selectedClienteId).single();
+    if (data) {
+      setAiSettings({
+        nomeAgente: data.nome_agente || '', nomeEmpresa: data.nome_empresa || '',
+        saudacao: data.saudacao || '', objetivo: data.objetivo || 'Agendar Reunião',
+        tipoConversao: data.tipo_conversao || 'Videochamada', papelHumano: data.papel_humano || '',
+        restricoes: data.restricoes || [], perguntasQualificacao: data.perguntas_qualificacao || [],
+        notificar_em: data.notificar_em || '', googleCalendarName: data.google_calendar_name || ''
+      });
+    }
   };
 
-  const removeRestricao = (index: number) => {
-    setAiSettings(prev => ({
-      ...prev,
-      restricoes: prev.restricoes.filter((_, i) => i !== index)
-    }));
-  };
-
-  const addPergunta = () => {
-    if (!novaPergunta.trim()) return;
-    setAiSettings(prev => ({
-      ...prev,
-      perguntasQualificacao: [...prev.perguntasQualificacao, { text: novaPergunta.trim(), required: novaPerguntaRequired }]
-    }));
-    setNovaPergunta('');
-    setNovaPerguntaRequired(false);
-  };
-
-  const removePergunta = (index: number) => {
-    setAiSettings(prev => ({
-      ...prev,
-      perguntasQualificacao: prev.perguntasQualificacao.filter((_, i) => i !== index)
-    }));
-  };
-
-  const togglePerguntaRequired = (index: number) => {
-    setAiSettings(prev => ({
-      ...prev,
-      perguntasQualificacao: prev.perguntasQualificacao.map((p, i) => 
-        i === index ? { ...p, required: !p.required } : p
-      )
-    }));
+  const disconnectInstance = async () => {
+    if (!selectedCliente?.instance_name) return;
+    setIsDisconnecting(true);
+    try {
+      const response = await fetch(`${WEBHOOK_BASE}/webhook/desconecta-instancia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instance: selectedCliente.instance_name })
+      });
+      if (response.ok) {
+        addToast("Desconexão enviada!", "success");
+        setTimeout(() => {
+          checkInstanceStatus(selectedClienteId, selectedCliente.instance_name!);
+          setIsDisconnecting(false);
+        }, 3000);
+      } else { setIsDisconnecting(false); }
+    } catch (err) { setIsDisconnecting(false); }
   };
 
   const fetchGroups = async () => {
@@ -1153,269 +723,189 @@ export default function App() {
     try {
       const data = await evolutionFetch(`group/fetchAllGroups/${selectedCliente.instance_name}?getParticipants=false`);
       setAvailableGroups(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Erro ao buscar grupos:", err);
-      addToast("Erro ao buscar grupos", "warning");
-    } finally {
-      setIsFetchingGroups(false);
-    }
+    } catch (err) { setIsFetchingGroups(false); } finally { setIsFetchingGroups(false); }
   };
 
-  const disconnectInstance = async () => {
-    console.log(">>> DEBUG: Botão desconectar clicado!");
-    console.log(">>> DEBUG: selectedClienteId:", selectedClienteId);
-    console.log(">>> DEBUG: selectedCliente object:", selectedCliente);
-    console.log(">>> DEBUG: instance_name:", selectedCliente?.instance_name);
-
-    if (!selectedCliente?.instance_name) {
-      console.error(">>> ERRO: Nome da instância está vazio ou nulo!");
-      addToast("Nome da instância não encontrado!", "warning");
-      return;
+  const saveProduct = async () => {
+    if (!formState.nome) return alert("Nome obrigatório");
+    setIsUploading(true);
+    let finalImageUrl = formState.imagemUrl || null;
+    if (imageFile) {
+      const fileExt = imageFile.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `${selectedClienteId}/${fileName}`;
+      const { error } = await supabase.storage.from('produtos_cliente').upload(filePath, imageFile);
+      if (!error) {
+        const { data: publicUrlData } = supabase.storage.from('produtos_cliente').getPublicUrl(filePath);
+        finalImageUrl = publicUrlData.publicUrl;
+      }
     }
-    
-    setIsDisconnecting(true);
-    console.log(">>> DEBUG: Enviando POST para:", "https://webhook.storyallday.com/webhook/desconecta-instancia");
+    const dbPayload = {
+      tenant_id: selectedClienteId, nome: formState.nome,
+      descricao: formState.descricao || '', preco: formState.preco || 0,
+      estoque: formState.estoque || 0, imagem_url: finalImageUrl
+    };
 
-    try {
-      const response = await fetch("https://webhook.storyallday.com/webhook/desconecta-instancia", {
+    let savedProduct: any;
+    if (editingId) {
+      const { data } = await supabase.from('z_bd_produtos').update(dbPayload).eq('id', editingId).select().single();
+      savedProduct = data;
+    } else {
+      const { data } = await supabase.from('z_bd_produtos').insert([dbPayload]).select().single();
+      savedProduct = data;
+    }
+
+    if (savedProduct) {
+      // SINCRONIZAÇÃO RAG
+      await supabase.from('z_atendimento_conhecimento')
+        .delete().filter('metadata->>id_ref', 'eq', savedProduct.id.toString());
+
+      const ragContent = `Produto: ${savedProduct.nome} | Descrição: ${savedProduct.descricao} | Preço: R$${savedProduct.preco} | Estoque: ${savedProduct.estoque}`;
+      const ragMetadata = {
+        id_ref: savedProduct.id.toString(),
+        tenant_id: selectedClienteId,
+        source: `z_bd_produtos_${savedProduct.id}`, 
+        tipo: 'produto'
+      };
+
+      const { data: ragData, error: rError } = await supabase.from('z_atendimento_conhecimento')
+        .insert([{ 
+          content: ragContent, 
+          metadata: ragMetadata 
+        }]).select().single();
+
+      if (!rError && ragData) {
+        fetch(`${WEBHOOK_BASE}/webhook/rag-disponibilidades`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([{
+            body: { record: ragData, type: editingId ? 'UPDATE' : 'INSERT' }
+          }])
+        }).catch(err => console.error('Erro Webhook RAG:', err));
+      }
+    }
+
+    setIsUploading(false);
+    setIsModalOpen(false);
+    fetchProdutos();
+  };
+
+  const saveClient = async () => {
+    if (!clientForm.nome) return alert("Nome obrigatório");
+    const instanceName = `${userEmail}-${clientForm.nome.replace(/\s+/g, '_').toLowerCase()}`;
+    const newId = 'cust_' + Date.now().toString(36);
+    const { error } = await supabase.from('z_bd_atendimento_clientes').insert([{ ...clientForm, id: newId, instance_name: instanceName, user_id: userEmail }]);
+    if (!error) {
+      await supabase.from('z_bd_configuracoes_ia').insert([{ cliente_id: newId }]);
+      fetch(`${WEBHOOK_BASE}/webhook/gerar-instancia`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instance: selectedCliente.instance_name })
+        body: JSON.stringify({ instance: instanceName })
       });
-
-      console.log(">>> DEBUG: Status da Resposta:", response.status);
-
-      if (response.ok) {
-        addToast("Pedido de desconexão enviado!", "success");
-        // Forçar atualização do status local após um pequeno delay
-        setTimeout(() => {
-          checkInstanceStatus(selectedClienteId!, selectedCliente.instance_name!);
-          setIsDisconnecting(false);
-        }, 3000);
-      } else {
-        const errText = await response.text();
-        console.error("Erro no webhook:", errText);
-        addToast("Erro ao solicitar desconexão", "warning");
-        setIsDisconnecting(false);
-      }
-    } catch (err) {
-      console.error("ERRO FATAL NA REQUISIÇÃO:", err);
-      addToast("Erro de conexão ao tentar desconectar", "warning");
-      setIsDisconnecting(false);
+      setClientForm({ nome: '', email: '', telefone: '' });
+      setIsClientModalOpen(false);
+      fetchClientes();
     }
   };
 
+  const deleteClient = async (e: React.MouseEvent, clientId: string, clientName: string) => {
+    e.stopPropagation();
+    if (window.confirm(`Excluir cliente "${clientName}"?`)) {
+      await supabase.from('z_bd_atendimento_clientes').delete().eq('id', clientId);
+      fetchClientes();
+    }
+  };
 
-  // Loading Screen
-  if (isLoadingAuth) {
-    return (
-      <div style={{ 
-        height: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: '#09090b',
-        color: 'white'
-      }}>
-        <div className="spinner" style={{ width: '40px', height: '40px' }}></div>
-      </div>
-    );
-  }
+  const handleScrape = async () => {
+    if (!scrapeUrl) return;
+    setIsScraping(true);
+    setScrapedProducts([]);
+    try {
+      const response = await fetch(`${WEBHOOK_BASE}/webhook/scrape-produtos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: scrapeUrl, tenant_id: selectedClienteId })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Servidor respondeu com erro ${response.status}: ${errorText.substring(0, 100)}`);
+      }
 
-  // Login Screen
-  if (!isLoggedIn) {
-    return <Auth onLoginSuccess={(email) => {
-      setUserEmail(email);
-      setIsLoggedIn(true);
-    }} />;
-  }
+      const data = await response.json();
+      const rawProducts = Array.isArray(data) ? data : (data.produtos || []);
+      
+      if (rawProducts.length === 0) {
+        alert("Nenhum produto encontrado neste link. O site pode estar bloqueando o acesso ou o formato é incompatível.");
+        return;
+      }
 
-  // Home Screen
-  if (view === 'home') {
-    return (
-      <div className="main-content" style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-        <header className="header-actions">
-          <div>
-            <h1>Olá, {userEmail.split('@')[0]}!</h1>
-            <p className="subtitle">Bem-vindo ao seu centro de comando Multi-Tenant.</p>
-          </div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button className="btn-outline" onClick={handleLogout}>
-              Sair
-            </button>
-            <button className="btn-primary" onClick={() => setIsClientModalOpen(true)}>
-              + Novo Cliente
-            </button>
-          </div>
-        </header>
+      const mapped = rawProducts.map((p: any) => ({
+        nome: p.nome || p.title || 'Produto sem nome',
+        preco: p.preco || p.price || 0,
+        descricao: p.descricao || p.description || '',
+        imagemUrl: p.imagemUrl || p.imagem || p.foto || p.image || '',
+        selected: true
+      }));
+      
+      setScrapedProducts(mapped);
+    } catch (err: any) { 
+      console.error('Erro no Scrape:', err);
+      alert(`Erro na importação: ${err.message}`);
+    } finally { 
+      setIsScraping(false); 
+    }
+  };
 
-        <div className="grid-cards">
-          {isLoadingClientes ? (
-            // Skeleton Loading State
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="glass-panel client-card skeleton-loading">
-                <div className="skeleton-line title"></div>
-                <div className="skeleton-line"></div>
-                <div className="skeleton-line short"></div>
-              </div>
-            ))
-          ) : (
-            <>
-              {clientes.map(cli => (
-                <div 
-                  key={cli.id} 
-                  className="glass-panel client-card" 
-                  style={{ cursor: 'pointer', position: 'relative' }}
-                  onClick={() => {
-                    setSelectedClienteId(cli.id);
-                    setView('client-hub');
-                  }}
-                >
-                  <button 
-                    onClick={(e) => deleteClient(e, cli.id, cli.nome)}
-                    className="delete-client-btn"
-                    style={{ 
-                      position: 'absolute', 
-                      top: '1rem', 
-                      right: '1rem', 
-                      background: 'rgba(239, 68, 68, 0.1)', 
-                      border: '1px solid rgba(239, 68, 68, 0.2)', 
-                      color: '#ef4444',
-                      padding: '6px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s ease',
-                      zIndex: 10
-                    }}
-                    title="Excluir Cliente"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                  <h3>{cli.nome}</h3>
+  const importSelectedProducts = async () => {
+    const productsToImport = scrapedProducts.filter(p => p.selected);
+    if (productsToImport.length === 0) return;
+    
+    setIsScraping(true);
+    const inserts = productsToImport.map(p => ({
+      tenant_id: selectedClienteId, 
+      nome: p.nome,
+      preco: parseFloat(p.preco) || 0, 
+      descricao: p.descricao || '',
+      imagem_url: p.imagemUrl || '', 
+      estoque: 10
+    }));
 
-                  <p>{cli.email || 'Sem e-mail'}</p>
-                  <p>{cli.telefone || 'Sem telefone'}</p>
-                  <div style={{ marginTop: 'auto', paddingTop: '1rem' }}>
-                    <span style={{ color: 'var(--accent-color)', fontSize: '0.8rem', fontWeight: 600 }}>GERENCIAR CLIENTE →</span>
-                  </div>
-                </div>
-              ))}
+    const { data: newProducts, error: pError } = await supabase.from('z_bd_produtos').insert(inserts).select();
+    
+    if (!pError && newProducts) {
+      // Sincronizar cada produto novo com a RAG
+      for (const prod of newProducts) {
+        const ragContent = `Produto: ${prod.nome} | Descrição: ${prod.descricao} | Preço: R$${prod.preco} | Estoque: ${prod.estoque}`;
+        const ragMetadata = {
+          id_ref: prod.id.toString(),
+          tenant_id: selectedClienteId,
+          source: `import_scrape_${prod.id}`,
+          tipo: 'produto'
+        };
 
-              {clientes.length === 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', gridColumn: '1 / -1' }}>
-                  <div className="action-card" onClick={() => setIsClientModalOpen(true)}>
-                    <h3>🚀 Comece agora</h3>
-                    <p>Adicione seu primeiro cliente para gerenciar estoque e RAG.</p>
-                  </div>
-                  <button className="btn-outline" onClick={fetchClientes} style={{ alignSelf: 'center' }}>
-                    🔄 Atualizar Banco (Caso tenha acabado de criar as tabelas)
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+        const { data: ragData } = await supabase.from('z_atendimento_conhecimento')
+          .insert([{ content: ragContent, metadata: ragMetadata }]).select().single();
 
-        {isClientModalOpen && (
-          <div className="modal-overlay">
-            <div className="glass-panel modal-content" style={{ maxWidth: '450px' }}>
-              <div className="modal-header">
-                <h2>Adicionar Cliente</h2>
-                <button className="btn-outline" onClick={() => setIsClientModalOpen(false)}>X</button>
-              </div>
-              <div className="form-group">
-                <label>Nome do Cliente / Empresa</label>
-                <input 
-                  type="text" 
-                  value={clientForm.nome} 
-                  onChange={e => setClientForm({...clientForm, nome: e.target.value})} 
-                  placeholder="Ex: Floricultura da Maria" 
-                />
-              </div>
-              <div className="form-group">
-                <label>E-mail de Contato</label>
-                <input 
-                  type="email" 
-                  value={clientForm.email} 
-                  onChange={e => setClientForm({...clientForm, email: e.target.value})} 
-                  placeholder="contato@empresa.com" 
-                />
-              </div>
-              <div className="form-group">
-                <label>Telefone / WhatsApp</label>
-                <input 
-                  type="text" 
-                  value={clientForm.telefone} 
-                  onChange={e => setClientForm({...clientForm, telefone: e.target.value})} 
-                  placeholder="(11) 99999-9999" 
-                />
-              </div>
-              <div className="modal-footer">
-                <button className="btn-outline" onClick={() => setIsClientModalOpen(false)}>Cancelar</button>
-                <button className="btn-primary" onClick={saveClient}>Criar Cliente</button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
+        if (ragData) {
+          fetch(`${WEBHOOK_BASE}/webhook/rag-disponibilidades`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify([{ body: { record: ragData, type: 'INSERT' } }])
+          }).catch(e => console.error(e));
+        }
+      }
+      
+      setIsScrapeModalOpen(false);
+      fetchProdutos();
+      addToast(`${newProducts.length} produtos importados e sincronizados!`, 'success');
+    } else {
+      alert("Erro ao importar produtos.");
+    }
+    setIsScraping(false);
+  };
 
-  // Client Hub Screen
-  if (view === 'client-hub') {
-
-    return (
-      <div className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
-        <button className="btn-outline" style={{ alignSelf: 'flex-start', marginBottom: '2rem' }} onClick={() => setView('home')}>
-          ← Voltar para Todos os Clientes
-        </button>
-        
-        <div className="client-hub-container">
-          <div className="hub-sidebar">
-            <div className="glass-panel client-card" style={{ transform: 'none', cursor: 'default', border: '1px solid var(--accent-color)' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🏢</div>
-              <h3>{selectedCliente?.nome}</h3>
-              <p>{selectedCliente?.email}</p>
-              <p>{selectedCliente?.telefone}</p>
-              <div style={{ marginTop: '2rem', fontSize: '0.8rem', color: 'var(--accent-color)', fontWeight: 600 }}>
-                CLIENTE SELECIONADO
-              </div>
-            </div>
-          </div>
-
-          <div className="hub-menu">
-            <button className="hub-option-btn" onClick={() => setView('config')}>
-              <div className="icon-box">⚙️</div>
-              <div>
-                <h4>Configuração</h4>
-                <p>Ajuste dados do perfil, instâncias e conexões.</p>
-              </div>
-            </button>
-            <button className="hub-option-btn" onClick={() => setView('conversas')}>
-              <div className="icon-box">💬</div>
-              <div>
-                <h4>Conversas</h4>
-                <p>Histórico de chats e atendimentos da IA.</p>
-              </div>
-            </button>
-            <button className="hub-option-btn" onClick={() => setView('inventory')}>
-              <div className="icon-box">📦</div>
-              <div>
-                <h4>Produtos</h4>
-                <p>Gerencie o estoque e sincronize com o RAG.</p>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const produtosFiltrados = produtos.filter(p => p.clienteId === selectedClienteId);
-
-
+  // --- RENDERERS ---
   const renderConversasView = () => {
     return (
       <div className="main-content" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -1427,22 +917,8 @@ export default function App() {
           
           <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
             <div className="view-toggle">
-              <button 
-                className={`toggle-btn ${conversasSubView === 'chat' ? 'active' : ''}`}
-                onClick={() => setConversasSubView('chat')}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <MessageSquare size={16} /> Chat
-                </div>
-              </button>
-              <button 
-                className={`toggle-btn ${conversasSubView === 'dashboard' ? 'active' : ''}`}
-                onClick={() => setConversasSubView('dashboard')}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <LayoutDashboard size={16} /> Dashboard
-                </div>
-              </button>
+              <button className={`toggle-btn ${conversasSubView === 'chat' ? 'active' : ''}`} onClick={() => setConversasSubView('chat')}><MessageSquare size={16} /> Chat</button>
+              <button className={`toggle-btn ${conversasSubView === 'dashboard' ? 'active' : ''}`} onClick={() => setConversasSubView('dashboard')}><LayoutDashboard size={16} /> Dashboard</button>
             </div>
             <button className="btn-outline" onClick={() => setView('client-hub')}>← Voltar ao Hub</button>
           </div>
@@ -1450,92 +926,96 @@ export default function App() {
 
         {conversasSubView === 'dashboard' ? renderDashboardView() : (
           <div className="chat-monitor-container">
-            {/* Sidebar de Contatos */}
-          <div className="glass-panel chat-sidebar">
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-              <input type="text" placeholder="Buscar contato..." className="search-input" style={{ background: 'rgba(0,0,0,0.2)' }} />
-            </div>
-            <div className="chat-list">
-              {isLoadingChat ? (
-                <div style={{ padding: '2rem', textAlign: 'center' }}><span className="spinner"></span></div>
-              ) : contacts.length === 0 ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Nenhuma conversa.</div>
-              ) : (
-                contacts.map(c => (
-                  <div 
-                    key={c.phone} 
-                    className={`contact-item ${selectedPhone === c.phone ? 'active' : ''}`}
-                    onClick={() => setSelectedPhone(c.phone)}
-                  >
-                    <div className="contact-info">
-                      <h4>
-                        {c.nomewpp}
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{c.time}</span>
-                      </h4>
-                      <p>{c.last_msg}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Área de Chat */}
-          <div className="glass-panel chat-area">
-            {selectedPhone ? (
-              <>
-                <div className="chat-header">
-                  <div>
-                    <h3 style={{ margin: 0 }}>{contacts.find(c => c.phone === selectedPhone)?.nomewpp}</h3>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{selectedPhone}</p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <span className={`badge-ia ${clientStatus?.atendimento_ia}`}>
-                      {clientStatus?.atendimento_ia === 'atendendo' ? '🤖 IA Ativa' : '👤 IA Pausada'}
-                    </span>
-                    <button className="btn-outline" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} onClick={toggleIAPause}>
-                      {clientStatus?.atendimento_ia === 'atendendo' ? 'Pausar IA' : 'Retomar IA'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="chat-history">
-                  {messages.map(m => (
-                    <div key={m.id} className={`message-bubble ${m.bot_message ? 'message-bot' : 'message-user'}`}>
-                      {m.user_message || m.bot_message}
-                      <span className="message-time">
-                        {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  ))}
-                  <div id="chat-end"></div>
-                </div>
-
-                <div className="chat-input-area">
-                  <input 
-                    type="text" 
-                    placeholder="Digite uma mensagem manual (Isso pausará a IA)..." 
-                    value={manualMsg}
-                    onChange={e => setManualMsg(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && sendManualMessage()}
-                  />
-                  <button className="btn-primary" onClick={sendManualMessage}>Enviar</button>
-                </div>
-              </>
-            ) : (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-                Selecione uma conversa para começar
+            <div className="glass-panel chat-sidebar">
+              <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)' }}>
+                <input type="text" placeholder="Buscar contato..." className="search-input" value={contactSearch} onChange={e => setContactSearch(e.target.value)} />
               </div>
-            )}
+              <div className="chat-list">
+                {contacts.filter(c => !contactSearch || c.nomewpp.toLowerCase().includes(contactSearch.toLowerCase()) || c.phone.includes(contactSearch)).map(c => (
+                  <div key={c.phone} className={`contact-item ${selectedPhone === c.phone ? 'active' : ''}`} onClick={() => setSelectedPhone(c.phone)}>
+                    <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-color), #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: 'white' }}>
+                      {c.nomewpp.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="contact-info"><h4><span>{c.nomewpp}</span><span style={{ fontSize: '0.65rem' }}>{c.time}</span></h4><p>{c.last_msg}</p></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="glass-panel chat-area">
+              {selectedPhone ? (
+                <>
+                  <div className="chat-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-color), #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: 'white' }}>
+                        {contacts.find(c => c.phone === selectedPhone)?.nomewpp.charAt(0).toUpperCase()}
+                      </div>
+                      <div><h3>{contacts.find(c => c.phone === selectedPhone)?.nomewpp}</h3><p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{selectedPhone}</p></div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                      <span className={`badge-ia ${clientStatus?.atendimento_ia}`}>{clientStatus?.atendimento_ia === 'atendendo' ? '🤖 IA Ativa' : '👤 IA Pausada'}</span>
+                      <button className="btn-outline" onClick={toggleIAPause}>Alternar</button>
+                    </div>
+                  </div>
+                  <div className="chat-history">
+                    {messages.map(m => (
+                      <Fragment key={m.id}>
+                        {m.user_message && (
+                          <div className={`message-bubble message-user group ${taughtMessageIds.includes(m.id) ? 'ensinado-rag' : ''}`} style={{ position: 'relative' }}>
+                            {m.user_message}
+                            <span className="message-time">{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            {!taughtMessageIds.includes(m.id) && (
+                              <button className="teach-btn" onClick={() => {
+                                setTeachingData({ objection: m.user_message!, answer: '', messageId: m.id });
+                                setShowTeachingModal(true);
+                              }}><Zap size={14} /></button>
+                            )}
+                          </div>
+                        )}
+                        {m.bot_message && (
+                          <div className="message-bubble message-bot">
+                            {m.bot_message}
+                            <span className="message-time">{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        )}
+                      </Fragment>
+                    ))}
+                    <div ref={chatEndRef} />
+                  </div>
+                  <div className="chat-input-area">
+                    <input type="text" value={manualMsg} onChange={e => setManualMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendManualMessage()} placeholder="Mensagem manual..." />
+                    <button className="btn-primary" onClick={sendManualMessage}><MessageSquare size={18} /></button>
+                  </div>
+                </>
+              ) : <div className="chat-empty"><p>Selecione uma conversa</p></div>}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
-};
+        )}
+
+        {showTeachingModal && (
+          <div className="modal-overlay">
+            <div className="glass-panel modal-content" style={{ maxWidth: '500px' }}>
+              <div className="modal-header"><h2>🧠 Ensinar IA</h2><button onClick={() => setShowTeachingModal(false)}><X /></button></div>
+              <div className="form-group">
+                <label>Objeção do Cliente</label>
+                <textarea rows={3} value={teachingData.objection} onChange={e => setTeachingData({...teachingData, objection: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Resposta Ideal</label>
+                <textarea rows={4} value={teachingData.answer} onChange={e => setTeachingData({...teachingData, answer: e.target.value})} placeholder="Como a IA deve responder?" />
+              </div>
+              <div className="modal-footer">
+                <button className="btn-outline" onClick={() => setShowTeachingModal(false)}>Cancelar</button>
+                <button className="btn-primary" onClick={saveTeaching} disabled={isLoading}>{isLoading ? 'Salvando...' : 'Salvar no RAG'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderConfigView = () => {
-    const status = instanceStatuses[selectedClienteId!] || 'desconectado';
+    const status = instanceStatuses[selectedClienteId] || 'desconectado';
     
     return (
       <div className="main-content" style={{ animation: 'fadeIn 0.5s ease' }}>
@@ -1564,16 +1044,12 @@ export default function App() {
                 color: status === 'conectado' ? '#10b981' : '#f59e0b',
                 marginTop: '0.5rem'
               }}>
-                {status === 'conectado' && instanceProfiles[selectedClienteId!] ? (
+                {status === 'conectado' && instanceProfiles[selectedClienteId] ? (
                   <img 
-                    src={instanceProfiles[selectedClienteId!]} 
+                    src={instanceProfiles[selectedClienteId]} 
                     alt="WhatsApp Profile" 
                     style={{ 
-                      width: '40px', 
-                      height: '40px', 
-                      borderRadius: '50%', 
-                      objectFit: 'cover', 
-                      border: '2px solid #10b981'
+                      width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #10b981'
                     }}
                   />
                 ) : (
@@ -1585,22 +1061,23 @@ export default function App() {
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>Instância: <strong>{selectedCliente?.instance_name}</strong></p>
 
-              
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                 {status === 'conectado' ? (
                   <>
                     <button 
                       className="btn-outline" 
                       style={{ 
-                        flex: 1, 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        gap: '0.5rem',
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
                         borderColor: linkCopied ? 'var(--success)' : 'var(--border-color)',
                         color: linkCopied ? 'var(--success)' : 'var(--text-primary)'
                       }} 
-                      onClick={copyQRCodeLink}
+                      onClick={() => {
+                        const link = `${window.location.origin}/qrcodegen/${selectedCliente?.instance_name}`;
+                        navigator.clipboard.writeText(link);
+                        setLinkCopied(true);
+                        addToast("Link copiado!", "success");
+                        setTimeout(() => setLinkCopied(false), 3000);
+                      }}
                     >
                       {linkCopied ? <><CheckCircle2 size={16} /> Copiado</> : <><Copy size={16} /> Link</>}
                     </button>
@@ -1609,490 +1086,133 @@ export default function App() {
                       onClick={disconnectInstance}
                       disabled={isDisconnecting}
                       style={{ 
-                        flex: 1.5,
-                        borderColor: '#ef4444', 
-                        color: '#ef4444',
-                        background: 'rgba(239, 68, 68, 0.05)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem',
+                        flex: 1.5, borderColor: '#ef4444', color: '#ef4444', background: 'rgba(239, 68, 68, 0.05)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
                         opacity: isDisconnecting ? 0.6 : 1
                       }}
                     >
-                      {isDisconnecting ? (
-                        <><span className="spinner" style={{ borderColor: '#ef4444', borderTopColor: 'transparent' }}></span> Aguarde...</>
-                      ) : (
-                        <><LogOut size={16} /> Desconectar</>
-                      )}
+                      {isDisconnecting ? <span className="spinner"></span> : <><LogOut size={16} /> Desconectar</>}
                     </button>
                   </>
                 ) : (
                   <>
-                    <button 
-                      className="btn-outline" 
-                      onClick={() => checkInstanceStatus(selectedClienteId!, selectedCliente?.instance_name!)}
-                      style={{ flex: 1 }}
-                    >
-                      🔄 Atualizar
-                    </button>
+                    <button className="btn-outline" onClick={() => checkInstanceStatus(selectedClienteId, selectedCliente?.instance_name!)} style={{ flex: 1 }}>🔄 Atualizar</button>
                     <button 
                       className="btn-primary" 
-                      style={{ 
-                        flex: 1.5, 
-                        background: qrCode ? 'rgba(255,255,255,0.05)' : 'var(--accent-color)',
-                        color: qrCode ? 'var(--text-primary)' : 'white',
-                        border: qrCode ? '1px solid var(--border-color)' : 'none',
-                        boxShadow: qrCode ? 'none' : '0 4px 14px 0 rgba(99, 102, 241, 0.39)'
+                      onClick={() => {
+                        if (qrCode) setQrCode(null);
+                        else {
+                          setIsGeneratingQr(true);
+                          fetch(`${WEBHOOK_BASE}/webhook/atualizar-qr-code`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ instance: selectedCliente?.instance_name })
+                          }).then(async res => {
+                            const contentType = res.headers.get("content-type");
+                            if (contentType && (contentType.includes("image") || contentType.includes("octet-stream"))) {
+                              const blob = await res.blob();
+                              setQrCode(URL.createObjectURL(blob));
+                              setQrTimeLeft(30);
+                            }
+                          }).finally(() => setIsGeneratingQr(false));
+                        }
                       }} 
-                      onClick={toggleQRCode} 
                       disabled={isGeneratingQr}
+                      style={{ flex: 1.5 }}
                     >
-                      {isGeneratingQr ? <span className="spinner"></span> : (
-                        qrCode ? <><X size={16} style={{marginRight: '8px'}} /> Fechar</> : <><QrCode size={16} style={{marginRight: '8px'}} /> Gerar QR Code</>
-                      )}
+                      {isGeneratingQr ? <span className="spinner"></span> : (qrCode ? 'Fechar QR' : 'Gerar QR Code')}
                     </button>
                   </>
                 )}
               </div>
 
               {qrCode && (
-                <div style={{ marginTop: '1.5rem', width: '100%', animation: 'fadeIn 0.3s ease' }}>
-                  <div style={{ 
-                    padding: '12px', 
-                    background: 'white', 
-                    borderRadius: '16px', 
-                    display: 'block',
-                    boxShadow: '0 0 30px rgba(99, 102, 241, 0.4)',
-                    border: '2px solid var(--accent-color)',
-                    margin: '0 auto',
-                    maxWidth: '300px'
-                  }}>
-                    <img 
-                      src={qrCode} 
-                      alt="WhatsApp QR Code" 
-                      style={{ display: 'block', width: '100%', height: 'auto', borderRadius: '8px' }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.1)', padding: '0.5rem', borderRadius: '8px', marginTop: '1rem', maxWidth: '200px', margin: '1rem auto' }}>
-                    <RefreshCw size={14} className="spin-slow" />
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>Expira em {qrTimeLeft}s</span>
+                <div style={{ marginTop: '1.5rem', animation: 'fadeIn 0.3s ease' }}>
+                  <div style={{ padding: '12px', background: 'white', borderRadius: '16px', border: '2px solid var(--accent-color)', margin: '0 auto', maxWidth: '300px' }}>
+                    <img src={qrCode} alt="QR" style={{ display: 'block', width: '100%', borderRadius: '8px' }} />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Novo Card: Onde a IA deve avisar as conversões? */}
-            <div className="glass-panel metric-card" style={{ 
-              marginTop: '1.5rem',
-              height: 'auto',
-              opacity: status === 'conectado' ? 1 : 0.6,
-              pointerEvents: status === 'conectado' ? 'auto' : 'none',
-              transition: 'all 0.3s ease'
-            }}>
-              <div className="metric-label" style={{ marginBottom: '1rem' }}>Onde a IA deve avisar as conversões?</div>
-              
-              <div>
-                <input 
-                  type="text" 
-                  value={aiSettings.notificarEm}
-                  onChange={e => setAiSettings({...aiSettings, notificarEm: e.target.value})}
-                  placeholder="Número (Ex: 5511...) ou selecione um grupo"
-                  style={{ marginBottom: '1rem' }}
-                />
-                
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <button 
-                    className="btn-outline" 
-                    style={{ 
-                      flex: 1, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      gap: '0.5rem',
-                      fontSize: '0.85rem',
-                      padding: '0.6rem 0.5rem',
-                      background: showGroups ? 'rgba(255,255,255,0.05)' : 'transparent'
-                    }} 
-                    onClick={() => showGroups ? setShowGroups(false) : fetchGroups()}
-                  >
-                    {showGroups ? <><X size={16} /> Fechar</> : 'avisar em grupo'}
-                  </button>
-                  
-                  <button 
-                    className="btn-primary" 
-                    style={{ 
-                      flex: 0.8,
-                      fontSize: '0.85rem',
-                      padding: '0.6rem 0.5rem',
-                      background: isSavingNotificar ? 'var(--success)' : 'var(--accent-color)'
-                    }}
-                    onClick={() => saveAISettings(true)}
-                    disabled={isSavingNotificar}
-                  >
-                    {isSavingNotificar ? <span className="spinner"></span> : 'Salvar'}
-                  </button>
-                </div>
+            {/* Notificação de Conversões */}
+            <div className="glass-panel metric-card" style={{ marginTop: '1.5rem', height: 'auto' }}>
+              <div className="metric-label" style={{ marginBottom: '1rem' }}>Avisar conversões em:</div>
+              <input 
+                type="text" 
+                value={aiSettings.notificarEm}
+                onChange={e => setAiSettings({...aiSettings, notificarEm: e.target.value})}
+                placeholder="Número ou ID de Grupo"
+              />
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <button className="btn-outline" onClick={() => showGroups ? setShowGroups(false) : fetchGroups()} style={{ flex: 1 }}>
+                  {showGroups ? 'Fechar' : 'Buscar Grupos'}
+                </button>
+                <button className="btn-primary" onClick={() => saveAISettings(true)} disabled={isSavingNotificar} style={{ flex: 1 }}>
+                  {isSavingNotificar ? <span className="spinner"></span> : 'Salvar'}
+                </button>
               </div>
-
               {showGroups && (
-                <div style={{ 
-                  marginTop: '1rem', 
-                  maxHeight: '200px', 
-                  overflowY: 'auto', 
-                  background: 'rgba(0,0,0,0.2)', 
-                  borderRadius: '8px',
-                  padding: '0.5rem',
-                  border: '1px solid var(--border-color)'
-                }}>
-                  {isFetchingGroups ? (
-                    <div style={{ textAlign: 'center', padding: '1rem' }}><span className="spinner"></span> Buscando grupos...</div>
-                  ) : availableGroups.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)' }}>Nenhum grupo encontrado.</div>
-                  ) : (
-                    availableGroups.map((g: any) => (
-                      <div 
-                        key={g.id} 
-                        className="contact-item" 
-                        style={{ padding: '0.75rem', marginBottom: '0.4rem', background: 'rgba(255,255,255,0.03)' }}
-                        onClick={() => {
-                          setAiSettings({...aiSettings, notificarEm: g.id});
-                          setShowGroups(false);
-                        }}
-                      >
-                        <div style={{ color: 'white', fontWeight: 600, fontSize: '0.9rem' }}>{g.subject || g.name}</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{g.id}</div>
-                      </div>
-                    ))
-                  )}
+                <div style={{ marginTop: '1rem', maxHeight: '150px', overflowY: 'auto', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '0.5rem' }}>
+                  {availableGroups.map((g: any) => (
+                    <div key={g.id} className="contact-item" style={{ padding: '0.5rem' }} onClick={() => { setAiSettings({...aiSettings, notificarEm: g.id}); setShowGroups(false); }}>
+                      <div style={{ fontSize: '0.8rem', color: 'white' }}>{g.subject || g.name}</div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </div>
 
-
-          {/* Coluna da Direita: Ajuste de Atendimento */}
-          <div className="glass-panel" style={{ flex: 1, padding: '2rem', animation: 'fadeIn 0.7s ease' }}>
+          {/* Ajuste de Atendimento */}
+          <div className="glass-panel" style={{ flex: 1, padding: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <Zap color="var(--accent-color)" size={24} />
-                <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Ajuste de Atendimento (IA)</h2>
-              </div>
-               <button 
-                className={`btn-primary ${showSuccessAI ? 'success' : ''}`} 
-                onClick={() => saveAISettings()} 
-                disabled={isSavingAI || showSuccessAI}
-                style={{ 
-                  padding: '0.6rem 2rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  minWidth: '160px',
-                  justifyContent: 'center',
-                  transition: 'all 0.3s ease',
-                  backgroundColor: showSuccessAI ? '#10b981' : undefined
-                }}
-              >
-                {isSavingAI ? (
-                  <><span className="spinner"></span> Salvando...</>
-                ) : showSuccessAI ? (
-                  <><CheckCircle2 size={18} /> Salvo!</>
-                ) : (
-                  'Salvar Ajustes'
-                )}
+              <h2 style={{ margin: 0 }}>🧠 Configurações da IA</h2>
+              <button className="btn-primary" onClick={() => saveAISettings()} disabled={isSavingAI || showSuccessAI}>
+                {isSavingAI ? <span className="spinner"></span> : showSuccessAI ? 'Salvo!' : 'Salvar Ajustes'}
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
               <div className="form-group">
-                <label>1. Nome do Agente</label>
-                <input 
-                  type="text" 
-                  value={aiSettings.nomeAgente}
-                  onChange={e => setAiSettings({...aiSettings, nomeAgente: e.target.value})}
-                  placeholder="Ex: Clarice, João, Atendente Virtual"
-                />
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>Como a IA se apresentará ao cliente</p>
+                <label>Nome do Agente</label>
+                <input type="text" value={aiSettings.nomeAgente} onChange={e => setAiSettings({...aiSettings, nomeAgente: e.target.value})} />
               </div>
-
               <div className="form-group">
-                <label>2. Nome da Empresa (IA)</label>
-                <input 
-                  type="text" 
-                  value={aiSettings.nomeEmpresa}
-                  onChange={e => setAiSettings({...aiSettings, nomeEmpresa: e.target.value})}
-                  placeholder="Ex: Floricultura da Maria, Tech Store"
-                />
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>Como a IA mencionará a empresa</p>
+                <label>Nome da Empresa</label>
+                <input type="text" value={aiSettings.nomeEmpresa} onChange={e => setAiSettings({...aiSettings, nomeEmpresa: e.target.value})} />
               </div>
-
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>3. Saudação Padrão</label>
-                <textarea 
-                  rows={3}
-                  value={aiSettings.saudacao}
-                  onChange={e => setAiSettings({...aiSettings, saudacao: e.target.value})}
-                  placeholder="Olá {nome}! Tudo bem? Sou a {{NOME_AGENTE}} da {{NOME_EMPRESA}}..."
-                />
+                <label>Saudação</label>
+                <textarea rows={2} value={aiSettings.saudacao} onChange={e => setAiSettings({...aiSettings, saudacao: e.target.value})} />
+              </div>
+              
+              <div className="form-group">
+                <label>Objetivo</label>
+                <select value={aiSettings.objetivo} onChange={e => setAiSettings({...aiSettings, objetivo: e.target.value})}>
+                  <option value="Agendar Reunião">Agendar Reunião</option>
+                  <option value="Venda Direta">Venda Direta</option>
+                  <option value="Suporte Técnico">Suporte Técnico</option>
+                  <option value="Qualificação Profunda">Qualificação Profunda</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Tipo de Conversão</label>
+                <input type="text" value={aiSettings.tipoConversao} onChange={e => setAiSettings({...aiSettings, tipoConversao: e.target.value})} />
               </div>
 
-              {/* Mapeamento de Objetivos -> Conversões */}
-              {(() => {
-                const conversaoOptions: Record<string, string[]> = {
-                  "Agendar Reunião": ["Videochamada", "Visita Presencial", "Ligação Telefônica"],
-                  "Venda Direta": ["Link de Pagamento", "Transferência PIX", "Falar com Vendedor"],
-                  "Suporte Técnico": ["Qualificação e Abertura de Chamado", "Base de Conhecimento", "Falar com Especialista", "Fechamento de Chamado"],
-                  "Qualificação Profunda": ["Formulário de Qualificação", "Encaminhar para SDR", "Análise de Perfil", "Score de Lead"]
-                };
-
-                const currentOptions = conversaoOptions[aiSettings.objetivo] || [];
-
-                return (
-                  <>
-                    <div className="form-group">
-                      <label>4. Objetivo do Agente</label>
-                      <select 
-                        value={aiSettings.objetivo}
-                        onChange={e => {
-                          const newObj = e.target.value;
-                          const firstConv = conversaoOptions[newObj]?.[0] || '';
-                          setAiSettings({
-                            ...aiSettings, 
-                            objetivo: newObj,
-                            tipoConversao: firstConv
-                          });
-                        }}
-                      >
-                        <option value="Agendar Reunião">Agendar Reunião</option>
-                        <option value="Venda Direta">Venda Direta</option>
-                        <option value="Suporte Técnico">Suporte Técnico</option>
-                        <option value="Qualificação Profunda">Qualificação Profunda</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label>5. Tipo de Conversão</label>
-                      <select 
-                        value={aiSettings.tipoConversao}
-                        onChange={e => setAiSettings({...aiSettings, tipoConversao: e.target.value})}
-                      >
-                        {currentOptions.map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </>
-                );
-              })()}
-
-              {/* Bloco Condicional para Google Calendar */}
               {aiSettings.objetivo === "Agendar Reunião" && (
-                <div style={{ 
-                  gridColumn: 'span 2', 
-                  background: 'rgba(99, 102, 241, 0.05)', 
-                  padding: '1.5rem', 
-                  borderRadius: '16px', 
-                  border: '1px solid rgba(99, 102, 241, 0.2)',
-                  animation: 'fadeIn 0.4s ease'
-                }}>
-                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                    <Calendar color="var(--accent-color)" size={24} style={{ flexShrink: 0, marginTop: '4px' }} />
-                    <div>
-                      <p style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', lineHeight: '1.5', color: '#f1f5f9' }}>
-                        Para visualizar agendamentos no Google, favor criar uma nova agenda, compartilhar ela com o email 
-                        <strong style={{ color: 'var(--accent-color)', margin: '0 4px' }}>"ismael.matias7622@gmail.com"</strong> 
-                        dando acesso de edição completo, e editar o nome <strong>EXATO</strong> da agenda no campo a seguir:
-                      </p>
-                      
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <input 
-                          type="text" 
-                          value={aiSettings.googleCalendarName}
-                          onChange={e => setAiSettings({...aiSettings, googleCalendarName: e.target.value})}
-                          placeholder="Ex: Agenda Consultas - Loja Centro"
-                          style={{ background: 'rgba(0,0,0,0.2)' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
+                <div style={{ gridColumn: 'span 2', background: 'rgba(99, 102, 241, 0.05)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                  <p style={{ fontSize: '0.8rem', marginBottom: '0.5rem' }}>Compartilhe sua agenda Google com: <strong>ismael.matias7622@gmail.com</strong></p>
+                  <input type="text" value={aiSettings.googleCalendarName} onChange={e => setAiSettings({...aiSettings, googleCalendarName: e.target.value})} placeholder="Nome EXATO da Agenda" />
                 </div>
               )}
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>6. Função/Papel do Humano</label>
-                <input 
-                  type="text" 
-                  value={aiSettings.papelHumano}
-                  onChange={e => setAiSettings({...aiSettings, papelHumano: e.target.value})}
-                  placeholder="Ex: Gerente de Vendas, Corretor, Consultor"
-                />
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>A quem a IA deve encaminhar o lead (ex: agendar reunião com meu Gerente de vendas)</p>
-              </div>
-
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>7. Restrições (O que a IA NÃO deve fazer)</label>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                  <input 
-                    type="text" 
-                    value={novaRestricao}
-                    onChange={e => setNovaRestricao(e.target.value)}
-                    onKeyPress={e => e.key === 'Enter' && addRestricao()}
-                    placeholder="Adicione uma restrição e pressione Enter (ex: não fale de política)"
-                    style={{ flex: 1 }}
-                  />
-                  <button className="btn-outline" onClick={addRestricao} style={{ padding: '0.75rem 1.5rem' }}>Adicionar</button>
-                </div>
-                
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {aiSettings.restricoes.map((res, idx) => (
-                    <div 
-                      key={idx} 
-                      style={{ 
-                        background: 'rgba(239, 68, 68, 0.1)', 
-                        color: '#f87171', 
-                        padding: '0.5rem 1rem', 
-                        borderRadius: '12px', 
-                        border: '1px solid rgba(239, 68, 68, 0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        animation: 'scaleUp 0.2s ease'
-                      }}
-                    >
-                      <span>❌ {res}</span>
-                      <X 
-                        size={14} 
-                        style={{ cursor: 'pointer', opacity: 0.7 }} 
-                        onClick={() => removeRestricao(idx)}
-                      />
-                    </div>
-                  ))}
-                  {aiSettings.restricoes.length === 0 && (
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Nenhuma restrição adicionada.</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Seção 8: Perguntas de Qualificação / Dados de Conversão */}
-              <div className="form-group" style={{ 
-                gridColumn: 'span 2', 
-                animation: 'fadeIn 0.5s ease',
-                background: 'rgba(99, 102, 241, 0.03)',
-                padding: '1.5rem',
-                borderRadius: '20px',
-                border: '1px solid rgba(99, 102, 241, 0.1)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <label style={{ color: 'var(--accent-color)', fontWeight: 700, margin: 0 }}>
-                    8. {aiSettings.objetivo === "Qualificação Profunda" ? "Perguntas de Qualificação" : "Dados Necessários para Conversão"}
-                  </label>
-                </div>
-
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                  {aiSettings.objetivo === "Qualificação Profunda" 
-                    ? "Defina as perguntas que a IA deve fazer para qualificar o lead antes de encerrar."
-                    : "Defina informações que a IA deve tentar coletar. Marque o 🔒 para tornar a pergunta obrigatória antes da conversão."}
-                </p>
-                
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', alignItems: 'center' }}>
-                  <input 
-                    type="text" 
-                    value={novaPergunta}
-                    onChange={e => setNovaPergunta(e.target.value)}
-                    onKeyPress={e => e.key === 'Enter' && addPergunta()}
-                    placeholder={aiSettings.objetivo === "Qualificação Profunda" ? "Ex: Qual o seu orçamento?" : "Ex: Qual o modelo do carro atual?"}
-                    style={{ flex: 1, background: 'rgba(0,0,0,0.2)' }}
-                  />
-                  
-                  <div 
-                    onClick={() => setNovaPerguntaRequired(!novaPerguntaRequired)}
-                    style={{ 
-                      padding: '0.75rem', 
-                      background: novaPerguntaRequired ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255,255,255,0.05)',
-                      borderRadius: '12px',
-                      cursor: 'pointer',
-                      border: `1px solid ${novaPerguntaRequired ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}`,
-                      color: novaPerguntaRequired ? 'var(--accent-color)' : '#94a3b8',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      transition: 'all 0.2s ease'
-                    }}
-                    title={novaPerguntaRequired ? "Obrigatória" : "Opcional"}
-                  >
-                    {novaPerguntaRequired ? <Shield size={18} /> : <Shield size={18} style={{ opacity: 0.3 }} />}
-                    <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{novaPerguntaRequired ? 'Mandatória' : 'Opcional'}</span>
-                  </div>
-
-                  <button className="btn-primary" onClick={addPergunta} style={{ padding: '0.75rem 1.5rem' }}>Adicionar</button>
-                </div>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                  {aiSettings.perguntasQualificacao.map((per, idx) => (
-                    <div 
-                      key={idx} 
-                      style={{ 
-                        background: 'rgba(255, 255, 255, 0.03)', 
-                        padding: '1rem', 
-                        borderRadius: '12px', 
-                        border: '1px solid var(--border-color)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '1rem',
-                        animation: 'slideInRight 0.2s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flex: 1 }}>
-                        <span style={{ 
-                          width: '24px', 
-                          height: '24px', 
-                          borderRadius: '50%', 
-                          background: 'var(--accent-color)', 
-                          fontSize: '0.75rem', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          fontWeight: 700,
-                          flexShrink: 0
-                        }}>{idx + 1}</span>
-                        <span style={{ fontSize: '0.9rem' }}>{per.text}</span>
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <div 
-                          onClick={() => togglePerguntaRequired(idx)}
-                          style={{ 
-                            cursor: 'pointer',
-                            color: per.required ? 'var(--accent-color)' : '#4b5563',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
-                            fontSize: '0.7rem',
-                            fontWeight: 600,
-                            padding: '0.3rem 0.6rem',
-                            borderRadius: '8px',
-                            background: per.required ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
-                            transition: 'all 0.2s ease'
-                          }}
-                        >
-                          {per.required ? <Shield size={14} /> : <Shield size={14} style={{ opacity: 0.3 }} />}
-                          {per.required ? 'OBRIGATÓRIA' : 'OPCIONAL'}
-                        </div>
-
-                        <X 
-                          size={18} 
-                          style={{ cursor: 'pointer', opacity: 0.5, color: '#ef4444' }} 
-                          onClick={() => removePergunta(idx)}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                  {aiSettings.perguntasQualificacao.length === 0 && (
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic', textAlign: 'center', padding: '1rem' }}>
-                      Nenhuma pergunta ou dado configurado.
-                    </p>
-                  )}
+                <label>O que a IA NÃO deve fazer (Restrições)</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input type="text" value={novaRestricao} onChange={e => setNovaRestricao(e.target.value)} onKeyPress={e => e.key === 'Enter' && setAiSettings(p => ({...p, restricoes: [...p.restricoes, novaRestricao]}))} />
+                  <button onClick={() => { setAiSettings(p => ({...p, restricoes: [...p.restricoes, novaRestricao]})); setNovaRestricao(''); }}>Add</button>
                 </div>
               </div>
             </div>
@@ -2103,424 +1223,347 @@ export default function App() {
   };
 
   const renderDashboardView = () => {
-    if (!dashboardData) return <div style={{ textAlign: 'center', padding: '5rem' }}><span className="spinner"></span> Carregando métricas...</div>;
-
+    if (!dashboardData) return <div className="spinner"></div>;
     return (
       <div style={{ animation: 'fadeIn 0.5s ease' }}>
         <div className="metrics-grid">
-          <div className="glass-panel metric-card">
-            <div className="metric-label">Total de Leads</div>
-            <div className="metric-value">{dashboardData.totalConversas}</div>
-            <div style={{ color: 'var(--success)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Users size={14} /> Ativos no período
-            </div>
-          </div>
-          <div className="glass-panel metric-card">
-            <div className="metric-label">Taxa de Resposta</div>
-            <div className="metric-value">{dashboardData.taxaResposta.toFixed(1)}%</div>
-            <div style={{ color: 'var(--accent-color)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <TrendingUp size={14} /> Engajamento IA
-            </div>
-          </div>
-          <div className="glass-panel metric-card">
-            <div className="metric-label">Agendamentos</div>
-            <div className="metric-value">{dashboardData.agendamentos}</div>
-            <div style={{ color: 'var(--success)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Calendar size={14} /> Convertidos
-            </div>
-          </div>
+          <div className="glass-panel metric-card"><div className="metric-label">Leads</div><div className="metric-value">{dashboardData.totalConversas}</div></div>
+          <div className="glass-panel metric-card"><div className="metric-label">Taxa Resposta</div><div className="metric-value">{dashboardData.taxaResposta.toFixed(1)}%</div></div>
+          <div className="glass-panel metric-card"><div className="metric-label">Agendamentos</div><div className="metric-value">{dashboardData.agendamentos}</div></div>
         </div>
-
-        <div className="glass-panel" style={{ padding: '2rem' }}>
-          <h3 style={{ marginBottom: '2rem', color: 'white' }}>Volume de Conversas (Iniciadas vs Respondidas)</h3>
-          <div className="chart-container">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dashboardData.chartData}>
-                <defs>
-                  <linearGradient id="colorIniciadas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--accent-color)" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="var(--accent-color)" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorRespondidas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--success)" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="var(--success)" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" stroke="var(--text-secondary)" fontSize={12} />
-                <YAxis stroke="var(--text-secondary)" fontSize={12} />
-                <Tooltip 
-                  contentStyle={{ background: '#18181b', border: '1px solid var(--border-color)', borderRadius: '8px' }}
-                  itemStyle={{ fontSize: '12px' }}
-                />
-                <Area type="monotone" dataKey="iniciadas" stroke="var(--accent-color)" fillOpacity={1} fill="url(#colorIniciadas)" name="IA Iniciou" />
-                <Area type="monotone" dataKey="respondidas" stroke="var(--success)" fillOpacity={1} fill="url(#colorRespondidas)" name="Cliente Respondeu" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="glass-panel" style={{ padding: '2rem', marginTop: '1.5rem', height: '400px' }}>
+          <h3 style={{ marginBottom: '1.5rem' }}>Volume de Conversas</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={dashboardData.chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
+              <YAxis stroke="#94a3b8" fontSize={12} />
+              <Tooltip contentStyle={{ background: '#18181b', border: '1px solid var(--border-color)' }} />
+              <Area type="monotone" dataKey="iniciadas" stroke="var(--accent-color)" fill="var(--accent-color)" fillOpacity={0.1} />
+              <Area type="monotone" dataKey="respondidas" stroke="var(--success)" fill="var(--success)" fillOpacity={0.1} />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </div>
     );
   };
 
-  const Sidebar = () => {
-    return (
-      <aside className="sidebar">
-        <div style={{ marginBottom: '2rem', cursor: 'pointer' }} onClick={() => setView('home')}>
-          <h2 style={{ fontSize: '1.2rem', color: 'white' }}>← Voltar ao Menu</h2>
+  const Sidebar = () => (
+    <aside className="sidebar">
+      <div onClick={() => setView('home')}><h2>← Home</h2></div>
+      {clientes.map(cli => (
+        <div key={cli.id} className={`menu-item ${selectedClienteId === cli.id ? 'active' : ''}`} onClick={() => setSelectedClienteId(cli.id)}>{cli.nome}</div>
+      ))}
+    </aside>
+  );
+
+  // --- MAIN RETURN ---
+  if (!isLoggedIn) return <Auth onLoginSuccess={(email) => { setUserEmail(email); setIsLoggedIn(true); }} />;
+
+  if (view === 'home') return (
+    <div className="main-content" style={{ maxWidth: '1400px', margin: '0 auto', width: '100%', animation: 'fadeIn 0.8s ease-out' }}>
+      <header className="header-actions" style={{ marginBottom: '3rem' }}>
+        <div>
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.04em' }}>Olá, {userEmail.split('@')[0]}!</h1>
+          <p className="subtitle" style={{ fontSize: '1.1rem', opacity: 0.8 }}>Centro de comando Multi-Tenant • Gerencie seus clientes e IAs</p>
         </div>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
-            Outros Clientes
-          </div>
-          {clientes.map(cli => (
-            <div 
-              key={cli.id} 
-              className={`menu-item ${selectedClienteId === cli.id ? 'active' : ''}`}
-              onClick={() => setSelectedClienteId(cli.id)}
-            >
-              {cli.nome}
-            </div>
-          ))}
+        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
+          <button className="btn-outline" style={{ padding: '0.8rem 1.5rem' }} onClick={() => supabase.auth.signOut()}>Sair</button>
+          <button className="btn-primary" style={{ padding: '0.8rem 2rem', fontSize: '1rem' }} onClick={() => setIsClientModalOpen(true)}>
+            <Plus size={20} style={{ marginRight: '8px' }} /> Novo Cliente
+          </button>
         </div>
-      </aside>
-    );
-  };
+      </header>
 
-  if (view === 'conversas') {
-    return (
-      <div className="layout-wrapper">
-        <Sidebar />
-        {renderConversasView()}
-      </div>
-    );
-  }
-
-  if (view === 'config') {
-    return (
-      <div className="layout-wrapper">
-        <Sidebar />
-        {renderConfigView()}
-      </div>
-    );
-  }
-
-
-  const handleScrape = async () => {
-    if (!scrapeUrl) return alert("Insira uma URL válida.");
-    setIsScraping(true);
-    setScrapedProducts([]);
-    
-    try {
-      // Aqui chamamos o seu webhook de scraping no n8n
-      const response = await fetch("https://webhook.storyallday.com/webhook/scrape-produtos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: scrapeUrl, tenant_id: selectedClienteId })
-      });
-      
-      const data = await response.json();
-      
-      // O formato esperado do n8n é uma lista de objetos: { nome, preco, imagem, descricao }
-      if (Array.isArray(data)) {
-        setScrapedProducts(data);
-        setSelectedScrapedIndices(data.map((_: any, i: number) => i)); // Seleciona todos por padrão
-      } else if (data.produtos) {
-        setScrapedProducts(data.produtos);
-        setSelectedScrapedIndices(data.produtos.map((_: any, i: number) => i));
-      } else {
-        alert("Nenhum produto encontrado ou erro no formato dos dados.");
-      }
-    } catch (err) {
-      console.error("Erro ao fazer scrape:", err);
-      alert("Erro na conexão com o serviço de scraping.");
-    } finally {
-      setIsScraping(false);
-    }
-  };
-
-  const importSelectedProducts = async () => {
-    if (selectedScrapedIndices.length === 0) return alert("Selecione ao menos um produto.");
-    setIsScraping(true);
-    
-    try {
-      const productsToImport = scrapedProducts.filter((_, i) => selectedScrapedIndices.includes(i));
-      
-      const inserts = productsToImport.map(p => ({
-        tenant_id: selectedClienteId,
-        nome: p.nome,
-        preco: parseFloat(p.preco) || 0,
-        descricao: p.descricao || '',
-        imagemUrl: p.imagem || p.foto || p.imagemUrl || '',
-        estoque: 10, // Valor padrão
-        created_at: new Date().toISOString()
-      }));
-
-      const { error } = await supabase.from('z_bd_produtos').insert(inserts);
-      
-      if (error) throw error;
-      
-      addToast(`${inserts.length} produtos importados com sucesso!`, "success");
-      setIsScrapeModalOpen(false);
-      fetchProdutos();
-    } catch (err: any) {
-      alert("Erro ao importar: " + err.message);
-    } finally {
-      setIsScraping(false);
-    }
-  };
-
-  const renderScrapeModal = () => (
-    <div className="modal-overlay">
-      <div className="glass-panel modal-content" style={{ maxWidth: '800px', width: '90%' }}>
-        <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Globe color="var(--accent-color)" />
-            <h2 style={{ margin: 0 }}>Importar de URL</h2>
-          </div>
-          <button className="btn-outline" onClick={() => setIsScrapeModalOpen(false)}><X size={18} /></button>
-        </div>
-
-        <div style={{ marginBottom: '2rem' }}>
-          <label>URL do Site/Página de Produtos</label>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <input 
-              type="url" 
-              value={scrapeUrl}
-              onChange={e => setScrapeUrl(e.target.value)}
-              placeholder="https://exemplo.com/produtos"
-              style={{ flex: 1 }}
-            />
-            <button className="btn-primary" onClick={handleScrape} disabled={isScraping}>
-              {isScraping ? <span className="spinner"></span> : 'Analisar Site'}
-            </button>
-          </div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-            Nossa IA irá navegar no site e extrair nomes, preços e fotos automaticamente.
-          </p>
-        </div>
-
-        {scrapedProducts.length > 0 && (
-          <div style={{ maxHeight: '400px', overflowY: 'auto', marginBottom: '1.5rem' }}>
-            <div style={{ marginBottom: '1rem', fontWeight: 600 }}>Produtos encontrados ({scrapedProducts.length})</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              {scrapedProducts.map((p, i) => (
-                <div key={i} className="glass-panel" style={{ 
-                  padding: '0.75rem', 
-                  display: 'flex', 
-                  gap: '1rem', 
-                  border: selectedScrapedIndices.includes(i) ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
-                  cursor: 'pointer',
-                  position: 'relative'
-                }} onClick={() => {
-                  if (selectedScrapedIndices.includes(i)) {
-                    setSelectedScrapedIndices(prev => prev.filter(idx => idx !== i));
-                  } else {
-                    setSelectedScrapedIndices(prev => [...prev, i]);
-                  }
-                }}>
-                  <input 
-                    type="checkbox" 
-                    checked={selectedScrapedIndices.includes(i)} 
-                    onChange={() => {}} 
-                    style={{ position: 'absolute', top: '10px', right: '10px' }}
-                  />
-                  <img 
-                    src={p.imagem || p.foto || p.imagemUrl || 'https://via.placeholder.com/100'} 
-                    style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.2 }}>{p.nome}</div>
-                    <div style={{ color: 'var(--accent-color)', fontWeight: 700, marginTop: '0.25rem' }}>R$ {p.preco}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
-                      {p.descricao}
+      <div className="grid-cards">
+        {isLoadingClientes ? Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="glass-panel client-card skeleton-loading" style={{ height: '280px' }}></div>
+        )) : (
+          clientes.map(cli => {
+            const status = instanceStatuses[cli.id] || 'desconectado';
+            const profile = instanceProfiles[cli.id];
+            return (
+              <div key={cli.id} className="glass-panel client-card" onClick={() => { setSelectedClienteId(cli.id); setView('client-hub'); }}>
+                <button onClick={(e) => deleteClient(e, cli.id, cli.nome)} className="delete-client-btn" title="Excluir Cliente">
+                  <Trash2 size={18} />
+                </button>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                  <div style={{ position: 'relative' }}>
+                    {profile ? (
+                      <img src={profile} alt={cli.nome} style={{ width: '64px', height: '64px', borderRadius: '18px', objectFit: 'cover', border: '2px solid var(--border-color)' }} />
+                    ) : (
+                      <div style={{ width: '64px', height: '64px', borderRadius: '18px', background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '1.5rem' }}>
+                        {cli.nome[0].toUpperCase()}
+                      </div>
+                    )}
+                    <div style={{ 
+                      position: 'absolute', bottom: '-4px', right: '-4px', width: '16px', height: '16px', borderRadius: '50%', 
+                      background: status === 'conectado' ? '#10b981' : '#f59e0b',
+                      border: '3px solid #18181b',
+                      boxShadow: status === 'conectado' ? '0 0 10px #10b981' : 'none'
+                    }}></div>
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.4rem' }}>{cli.nome}</h3>
+                    <div style={{ fontSize: '0.85rem', color: status === 'conectado' ? '#10b981' : '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '4px' }}>
+                      {status === 'conectado' ? 'Instância Ativa' : 'Desconectado'}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {scrapedProducts.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn-primary" style={{ padding: '0.75rem 2.5rem' }} onClick={importSelectedProducts} disabled={isScraping}>
-              {isScraping ? <span className="spinner"></span> : `Importar ${selectedScrapedIndices.length} Produtos`}
-            </button>
-          </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem' }}><Mail size={14} /> {cli.email || 'Sem email'}</p>
+                  <p style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem' }}><Phone size={14} /> {cli.telefone || 'Sem telefone'}</p>
+                </div>
+
+                <div className="manage-tag" style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+                  Gerenciar Painel <ArrowRight size={16} />
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
+
+      {isClientModalOpen && (
+        <div className="modal-overlay" style={{ backdropFilter: 'blur(8px)' }}>
+          <div className="glass-panel modal-content" style={{ maxWidth: '480px', padding: '2.5rem' }}>
+            <div className="modal-header" style={{ marginBottom: '2rem' }}>
+              <h2 style={{ fontSize: '1.8rem', fontWeight: 800 }}>Novo Cliente</h2>
+              <button onClick={() => setIsClientModalOpen(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', cursor: 'pointer', padding: '8px', borderRadius: '50%' }}><X size={20} /></button>
+            </div>
+            <div className="form-group">
+              <label>Nome da Empresa / Cliente</label>
+              <input type="text" placeholder="Ex: Imobiliária Silva" value={clientForm.nome} onChange={e => setClientForm({...clientForm, nome: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>Email de Contato</label>
+              <input type="email" placeholder="contato@empresa.com" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>Telefone WhatsApp</label>
+              <input type="text" placeholder="5511999999999" value={clientForm.telefone} onChange={e => setClientForm({...clientForm, telefone: e.target.value})} />
+            </div>
+            <div className="modal-footer" style={{ marginTop: '2.5rem', gap: '1rem' }}>
+              <button className="btn-outline" style={{ flex: 1 }} onClick={() => setIsClientModalOpen(false)}>Cancelar</button>
+              <button className="btn-primary" style={{ flex: 1.5 }} onClick={saveClient} disabled={isLoading}>{isLoading ? 'Criando...' : 'Criar Instância'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  if (view === 'client-hub') return (
+    <div className="main-content" style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', animation: 'slideUp 0.6s ease-out' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
+        <button className="btn-outline" onClick={() => setView('home')} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <ArrowLeft size={18} /> Voltar aos Clientes
+        </button>
+        <div style={{ textAlign: 'right' }}>
+          <h1 style={{ margin: 0, fontSize: '2rem' }}>{selectedCliente?.nome}</h1>
+          <p className="subtitle" style={{ margin: 0 }}>Hub de Gestão</p>
+        </div>
+      </div>
+
+      <div className="client-hub-container">
+        <div className="hub-sidebar">
+          <div className="glass-panel client-card" style={{ 
+            height: 'auto', 
+            padding: '2rem', 
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(24, 24, 27, 0.7) 100%)',
+            border: '1px solid rgba(99, 102, 241, 0.3)' 
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+               {instanceProfiles[selectedClienteId] ? (
+                <img src={instanceProfiles[selectedClienteId]} alt="Profile" style={{ width: '50px', height: '50px', borderRadius: '12px' }} />
+              ) : (
+                <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: 'var(--accent-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><User size={24} /></div>
+              )}
+              <div>
+                <h3 style={{ fontSize: '1.2rem' }}>Resumo</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: instanceStatuses[selectedClienteId] === 'conectado' ? '#10b981' : '#f59e0b' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor' }}></div>
+                  {instanceStatuses[selectedClienteId] === 'conectado' ? 'WhatsApp Conectado' : 'WhatsApp Offline'}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: '0.9rem', opacity: 0.8, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <p><strong>ID:</strong> {selectedClienteId}</p>
+              <p><strong>Instância:</strong> {selectedCliente?.instance_name}</p>
+              <p><strong>Email:</strong> {selectedCliente?.email}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="hub-menu">
+          <button className="hub-option-btn" onClick={() => setView('config')} style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+            <div style={{ width: '60px', height: '60px', borderRadius: '16px', background: 'rgba(99, 102, 241, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-color)' }}>
+              <Settings size={32} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '4px' }}>Configurações da IA</div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 400, opacity: 0.6 }}>Ajuste a personalidade, objetivos e conexão WhatsApp</div>
+            </div>
+            <ArrowRight size={24} style={{ marginLeft: 'auto', opacity: 0.3 }} />
+          </button>
+
+          <button className="hub-option-btn" onClick={() => setView('conversas')} style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+            <div style={{ width: '60px', height: '60px', borderRadius: '16px', background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
+              <MessageSquare size={32} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '4px' }}>Monitor de Chat</div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 400, opacity: 0.6 }}>Acompanhe conversas em tempo real e treine sua IA</div>
+            </div>
+            <ArrowRight size={24} style={{ marginLeft: 'auto', opacity: 0.3 }} />
+          </button>
+
+          <button className="hub-option-btn" onClick={() => setView('inventory')} style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+            <div style={{ width: '60px', height: '60px', borderRadius: '16px', background: 'rgba(245, 158, 11, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
+              <Package size={32} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '4px' }}>Estoque & RAG</div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 400, opacity: 0.6 }}>Cadastre produtos e alimente a base de conhecimento</div>
+            </div>
+            <ArrowRight size={24} style={{ marginLeft: 'auto', opacity: 0.3 }} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (view === 'inventory') return (
+    <div className="main-content" style={{ maxWidth: '1300px', margin: '0 auto', width: '100%', animation: 'fadeIn 0.5s ease' }}>
+      <header className="header-actions" style={{ marginBottom: '3rem' }}>
+        <div>
+          <h1 style={{ fontSize: '2.2rem', fontWeight: 800 }}>Estoque & RAG</h1>
+          <p className="subtitle">Gerencie o catálogo de produtos e treinamento vetorial</p>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button className="btn-outline" onClick={() => setIsScrapeModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Globe size={18} /> Importar Site
+          </button>
+          <button className="btn-primary" onClick={() => { setEditingId(null); setFormState({nome:'',descricao:'',preco:0,estoque:0}); setIsModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Plus size={20} /> Adicionar Produto
+          </button>
+          <button className="btn-outline" onClick={() => setView('client-hub')}>Hub</button>
+        </div>
+      </header>
+
+      <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+        {produtos.map(p => (
+          <div key={p.id} className="glass-panel product-card" onClick={() => { setEditingId(p.id); setFormState(p); setIsModalOpen(true); }}>
+            <div style={{ position: 'relative', height: '180px', overflow: 'hidden', borderRadius: '12px', marginBottom: '1rem' }}>
+              {p.imagemUrl ? (
+                <img src={p.imagemUrl} alt={p.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)' }}>
+                  <Package size={48} />
+                </div>
+              )}
+              <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+                <div className={`stock-badge ${p.estoque > 5 ? 'stock-high' : p.estoque > 0 ? 'stock-low' : 'stock-out'}`} style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700 }}>
+                   {p.estoque > 0 ? `${p.estoque} EM ESTOQUE` : 'ESGOTADO'}
+                </div>
+              </div>
+            </div>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{p.nome}</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', height: '2.4rem' }}>
+              {p.descricao || 'Sem descrição cadastrada.'}
+            </p>
+            <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="price" style={{ fontSize: '1.4rem' }}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco)}</span>
+              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '6px', borderRadius: '8px' }}><Settings size={16} /></div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {isModalOpen && (
+        <div className="modal-overlay" style={{ backdropFilter: 'blur(8px)' }}>
+          <div className="glass-panel modal-content" style={{ maxWidth: '550px', padding: '2.5rem' }}>
+            <div className="modal-header" style={{ marginBottom: '2rem' }}>
+              <h2 style={{ fontSize: '1.8rem' }}>{editingId ? 'Editar' : 'Novo'} Produto</h2>
+              <button onClick={() => setIsModalOpen(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', cursor: 'pointer', padding: '8px', borderRadius: '50%' }}><X size={20} /></button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Nome do Produto</label>
+                <input type="text" value={formState.nome} onChange={e => setFormState({...formState, nome: e.target.value})} />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Descrição (será usada na RAG)</label>
+                <textarea rows={3} value={formState.descricao} onChange={e => setFormState({...formState, descricao: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Preço (R$)</label>
+                <input type="number" value={formState.preco} onChange={e => setFormState({...formState, preco: parseFloat(e.target.value)})} />
+              </div>
+              <div className="form-group">
+                <label>Estoque</label>
+                <input type="number" value={formState.estoque} onChange={e => setFormState({...formState, estoque: parseInt(e.target.value)})} />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Imagem do Produto</label>
+                <input type="file" onChange={e => setImageFile(e.target.files?.[0] || null)} style={{ border: '1px dashed var(--border-color)', padding: '2rem', textAlign: 'center' }} />
+              </div>
+            </div>
+            <div className="modal-footer" style={{ marginTop: '2.5rem', gap: '1rem' }}>
+               <button className="btn-outline" style={{ flex: 1 }} onClick={() => setIsModalOpen(false)}>Cancelar</button>
+               <button className="btn-primary" style={{ flex: 2 }} onClick={saveProduct} disabled={isUploading}>{isUploading ? 'Processando RAG...' : 'Salvar Produto'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isScrapeModalOpen && (
+        <div className="modal-overlay" style={{ backdropFilter: 'blur(10px)' }}>
+          <div className="glass-panel modal-content" style={{ maxWidth: '900px', width: '90%' }}>
+            <div className="modal-header">
+              <h2>🌐 Importar do Site</h2>
+              <button onClick={() => setIsScrapeModalOpen(false)}><X size={20} /></button>
+            </div>
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+              <input type="text" style={{ flex: 1 }} value={scrapeUrl} onChange={e => setScrapeUrl(e.target.value)} placeholder="https://loja-exemplo.com/produtos" />
+              <button className="btn-primary" onClick={handleScrape} disabled={isScraping}>{isScraping ? 'Analisando...' : 'Buscar Produtos'}</button>
+            </div>
+            
+            <div className="grid-cards" style={{ maxHeight: '400px', overflowY: 'auto', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', padding: '1rem' }}>
+              {scrapedProducts.map((p, i) => (
+                <div key={i} className="glass-panel" style={{ padding: '1rem', border: '1px solid var(--border-color)', position: 'relative' }}>
+                  <input type="checkbox" style={{ position: 'absolute', top: '10px', right: '10px', width: '20px', height: '20px' }} checked={p.selected} onChange={() => {
+                    const newScraped = [...scrapedProducts];
+                    newScraped[i].selected = !newScraped[i].selected;
+                    setScrapedProducts(newScraped);
+                  }} />
+                  <div style={{ height: '100px', background: '#111', borderRadius: '8px', marginBottom: '0.5rem', overflow: 'hidden' }}>
+                    {p.imagemUrl && <img src={p.imagemUrl} alt={p.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                  </div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.nome}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--accent-color)' }}>R$ {p.preco}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="modal-footer" style={{ marginTop: '2rem' }}>
+              <button className="btn-outline" onClick={() => setIsScrapeModalOpen(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={importSelectedProducts} disabled={!scrapedProducts.some(p => p.selected)}>
+                Importar {scrapedProducts.filter(p=>p.selected).length} itens
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
   return (
     <div className="layout-wrapper">
       <Sidebar />
-
-      {/* Notificações (Toasts) */}
-      <div className="toast-container" style={{ position: 'fixed', bottom: '2rem', right: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', zIndex: 9999 }}>
-        {toasts.map(t => (
-          <div key={t.id} className={`glass-panel toast-item ${t.type}`} style={{ 
-            padding: '1rem 1.5rem', 
-            borderLeft: `4px solid ${t.type === 'warning' ? 'var(--warning)' : 'var(--success)'}`,
-            background: 'rgba(24, 24, 27, 0.95)',
-            animation: 'slideInRight 0.3s ease',
-            minWidth: '280px'
-          }}>
-            <div style={{ fontWeight: 600, color: 'white' }}>Atenção!</div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{t.message}</div>
-          </div>
-        ))}
-      </div>
-
-      {isScrapeModalOpen && renderScrapeModal()}
-
-      <main className="main-content">
-        <header className="header-actions">
-          <div>
-            <h1>Estoque: {selectedCliente?.nome}</h1>
-            <p className="subtitle">Painel de Controle e Sincronia com RAG</p>
-          </div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button className="btn-outline" onClick={() => setIsScrapeModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Globe size={16} /> 
-              Importar do Site
-            </button>
-            <button className="btn-primary" onClick={openNewProduct}>
-              <span style={{ marginRight: '8px' }}>+</span> 
-              Novo Produto
-            </button>
-          </div>
-        </header>
-
-        <div className="glass-panel table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Produto</th>
-                <th>Descrição</th>
-                <th>Preço (R$)</th>
-                <th>Estoque</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {produtosFiltrados.length === 0 && (
-                <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '3rem' }}>
-                    Nenhum produto cadastrado para este cliente.
-                  </td>
-                </tr>
-              )}
-              {produtosFiltrados.map(p => (
-                <tr key={p.id}>
-                  <td>
-                    <div className="product-cell">
-                      <img className="product-image" src={p.imagemUrl || `https://via.placeholder.com/150/1e1e1e/FFFFFF?text=${p.nome.charAt(0)}`} alt={p.nome} />
-                      <strong>{p.nome}</strong>
-                    </div>
-                  </td>
-                  <td>{p.descricao}</td>
-                  <td>R$ {p.preco.toFixed(2)}</td>
-                  <td>
-                    <span className={`stock-badge ${getStockClass(p.estoque)}`}>
-                      {p.estoque} Unid.
-                    </span>
-                  </td>
-                  <td>
-                    <button className="btn-outline" onClick={() => openEditProduct(p)}>
-                      Editar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </main>
-
-      {/* Modal / Formulário */}
-      {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="glass-panel modal-content">
-            <div className="modal-header">
-              <h2>{editingId ? 'Editar Produto' : 'Cadastrar Novo Produto'}</h2>
-              <button className="btn-outline" onClick={() => setIsModalOpen(false)}>X</button>
-            </div>
-
-            <div className="form-group row">
-              <div>
-                <label>Nome do Produto</label>
-                <input 
-                  type="text" 
-                  value={formState.nome} 
-                  onChange={e => setFormState({...formState, nome: e.target.value})} 
-                  placeholder="Ex: Pneu Aro 13" 
-                />
-              </div>
-              <div>
-                <label>Upload Imagem Supabase</label>
-                <div className="upload-area" style={{ padding: '1.5rem', cursor: 'pointer' }} onClick={() => document.getElementById('file-upload')?.click()}>
-                  {imageFile ? imageFile.name : (formState.imagemUrl ? 'Imagem atual salva. Clique para alterar.' : '⬇️ Clique para anexar Imagem')}
-                  <input 
-                    id="file-upload"
-                    type="file" 
-                    accept="image/*" 
-                    style={{ display: 'none' }} 
-                    onChange={e => {
-                      if (e.target.files && e.target.files[0]) {
-                        setImageFile(e.target.files[0]);
-                      }
-                    }} 
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Descrição rica (Muitos detalhes ajudam o RAG LangChain)</label>
-              <textarea 
-                rows={3} 
-                value={formState.descricao} 
-                onChange={e => setFormState({...formState, descricao: e.target.value})} 
-                placeholder="Detalhe o produto para que a IA tenha excelente contexto semântico..."
-              />
-            </div>
-
-            <div className="form-group row">
-              <div>
-                <label>Preço</label>
-                <input 
-                  type="text" 
-                  value={formatCurrency(formState.preco || 0)} 
-                  onChange={handlePriceChange} 
-                />
-              </div>
-              <div>
-                <label>Qtd. no Estoque</label>
-                <input 
-                  type="number" 
-                  value={formState.estoque} 
-                  onChange={e => setFormState({...formState, estoque: parseInt(e.target.value) || 0})} 
-                />
-              </div>
-            </div>
-
-            <div className="modal-footer">
-              <button className="btn-outline" onClick={() => setIsModalOpen(false)} disabled={isUploading}>Cancelar</button>
-              <button className="btn-primary" onClick={saveProduct} disabled={isUploading} style={{ display: 'flex', alignItems: 'center' }}>
-                {isUploading ? (
-                  <>
-                    <span className="spinner"></span>
-                    Enviando imagem...
-                  </>
-                ) : 'Salvar Produto'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {view === 'conversas' ? renderConversasView() : view === 'config' ? renderConfigView() : <div>View não encontrada</div>}
     </div>
   );
 }
