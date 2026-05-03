@@ -869,7 +869,7 @@ export default function App() {
     // --- SINCRONIZAÇÃO COM RAG ---
     try {
       // 1. Limpa o antigo no RAG
-      await supabase.from('z_atendimento_produtos')
+      await supabase.from('z_atendimento_conhecimento')
         .delete()
         .filter('metadata->>id_ref', 'eq', savedProduct.id);
 
@@ -879,24 +879,24 @@ export default function App() {
         id_ref: savedProduct.id,
         tenant_id: savedProduct.tenant_id,
         source: `z_bd_produtos_${savedProduct.id}`,
-        type: 'produto'
+        tipo: 'produto'
       };
 
       // 3. Insere no RAG
       const { data: ragData, error: ragError } = await supabase
-        .from('z_atendimento_produtos')
+        .from('z_atendimento_conhecimento')
         .insert([{ content: ragContent, metadata: ragMetadata }])
         .select()
         .single();
 
       if (!ragError && ragData) {
         // 4. Dispara Webhook de Embedding conforme formato solicitado
-        await fetch("https://webhook.interfacepsc.com.br/webhook/rag-produtos", {
+        await fetch("https://webhook.storyallday.com/webhook/rag-disponibilidades", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify([{
             headers: {
-              "host": "n8n.interfacepsc.com.br",
+              "host": "n8n.storyallday.com",
               "content-type": "application/json"
             },
             params: {},
