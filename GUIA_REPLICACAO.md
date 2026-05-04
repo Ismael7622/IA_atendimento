@@ -77,6 +77,7 @@ CREATE TABLE z_bd_produtos (
   preco numeric DEFAULT 0,
   estoque integer DEFAULT 0,
   imagem_url text,
+  tipo text DEFAULT 'produto',
   created_at timestamptz DEFAULT now()
 );
 
@@ -147,6 +148,7 @@ type Cliente = {
 type Produto = {
   id: string; clienteId: string; nome: string;
   descricao: string; preco: number; estoque: number; imagemUrl?: string;
+  tipo: 'produto' | 'servico';
 };
 
 type ChatMessage = {
@@ -257,8 +259,9 @@ const saveProduct = async () => {
   const dbPayload = {
     tenant_id: selectedClienteId,
     nome: formState.nome, descricao: formState.descricao || '',
-    preco: formState.preco || 0, estoque: formState.estoque || 0,
-    imagem_url: finalImageUrl
+    preco: formState.preco || 0, estoque: formState.tipo === 'servico' ? 0 : (formState.estoque || 0),
+    imagem_url: finalImageUrl,
+    tipo: formState.tipo || 'produto'
   };
 
   // 2. Salva produto no banco
@@ -276,10 +279,11 @@ const saveProduct = async () => {
   await supabase.from('z_atendimento_conhecimento')
     .delete().filter('metadata->>id_ref', 'eq', savedProduct.id);
 
-  const ragContent = `Produto: ${savedProduct.nome} | Descrição: ${savedProduct.descricao} | Preço: R$${savedProduct.preco} | Estoque: ${savedProduct.estoque}`;
+  const label = savedProduct.tipo === 'servico' ? 'Serviço' : 'Produto';
+  const ragContent = `${label}: ${savedProduct.nome} | Descrição: ${savedProduct.descricao} | Preço: R$${savedProduct.preco}${savedProduct.tipo === 'servico' ? ' | Disponibilidade: Sob Consulta (Serviço)' : ` | Estoque: ${savedProduct.estoque}`}`;
   const ragMetadata = {
     id_ref: savedProduct.id, tenant_id: savedProduct.tenant_id,
-    source: `z_bd_produtos_${savedProduct.id}`, tipo: 'produto'
+    source: `z_bd_produtos_${savedProduct.id}`, tipo: savedProduct.tipo || 'produto'
   };
 
   const { data: ragData } = await supabase.from('z_atendimento_conhecimento')
@@ -298,6 +302,25 @@ const saveProduct = async () => {
 
   setIsUploading(false);
   setIsModalOpen(false);
+  fetchProdutos();
+};
+
+const deleteProduct = async (id: string) => {
+  if (!window.confirm("Deseja realmente excluir este produto?")) return;
+  
+  // 1. Deletar do RAG
+  await supabase.from('z_atendimento_conhecimento')
+    .delete().filter('metadata->>id_ref', 'eq', id.toString());
+
+  // 2. Notificar Webhook RAG (DELETE)
+  fetch('https://SEU_WEBHOOK/rag-disponibilidades', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([{ body: { record: { id_ref: id }, type: 'DELETE' } }])
+  }).catch(e => console.error(e));
+
+  // 3. Deletar produto
+  await supabase.from('z_bd_produtos').delete().eq('id', id);
   fetchProdutos();
 };
 ```

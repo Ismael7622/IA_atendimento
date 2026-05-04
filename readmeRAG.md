@@ -1,4 +1,11 @@
-# Arquitetura RAG Auto-Atualizável (Supabase pgvector + Banco + Frontend)
+# Sistema RAG Multi-Tenant - Documentação Técnica
+
+> [!IMPORTANT]
+> **DIRETRIZ CRÍTICA PARA IA:**
+> VOCÊ JAMAIS DEVE MEXER EM ALGO QUE EU NÃO MANDEI. 
+> Preserve integralmente todas as funcionalidades, componentes, estilos e lógicas existentes que não foram explicitamente citadas para modificação. Regressões são inaceitáveis.
+
+## 📌 Arquitetura de Sincronização RAG
 
 Este documento foi criado para orientar desenvolvedores e Inteligências Artificiais (como o agente Antigravity) a replicar uma arquitetura RAG (Retrieval-Augmented Generation) coesa.
 Ele detalha desde a camada Frontend (UI/UX) do Cadastro de Produtos (e vínculos/insumos) até chegar no PostgreSQL e na orquestração dos Embeddings via Supabase pgvector e LangChain. A leitura atenta deste documento garante a recriação *pixel-perfect* num novo projeto.

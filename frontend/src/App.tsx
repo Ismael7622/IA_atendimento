@@ -187,6 +187,7 @@ type Produto = {
   preco: number;
   estoque: number;
   imagemUrl?: string;
+  tipo: 'produto' | 'servico';
 };
 
 type Cliente = {
@@ -220,6 +221,13 @@ type ClientStatus = {
   tenant_id?: string;
 };
 
+const conversaoOptions: Record<string, string[]> = {
+  'Agendamento':          ['Videochamada', 'Visita Presencial', 'Ligação Telefônica', 'Agendamento de Serviço'],
+  'Venda Direta':         ['Link de Pagamento', 'Transferência PIX', 'Falar com Vendedor'],
+  'Suporte Técnico':      ['Qualificação e Abertura de Chamado', 'Base de Conhecimento', 'Falar com Especialista'],
+  'Qualificação Profunda':['Formulário de Qualificação', 'Encaminhar para SDR', 'Score de Lead']
+};
+
 export default function App() {
   // Detecção de Rota Externa para QR Code
   const isQRCodeGen = window.location.pathname.startsWith('/qrcodegen/');
@@ -251,7 +259,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [formState, setFormState] = useState<Partial<Produto>>({ nome: '', descricao: '', preco: 0, estoque: 0 });
+  const [formState, setFormState] = useState<Partial<Produto>>({ nome: '', descricao: '', preco: 0, estoque: 0, tipo: 'produto' });
 
   // Chat Monitor State
   const [contacts, setContacts] = useState<{ phone: string, nomewpp: string, last_msg: string, time: string, unread?: boolean }[]>([]);
@@ -288,7 +296,7 @@ export default function App() {
 
   // AI Settings State
   const [aiSettings, setAiSettings] = useState({
-    nomeAgente: '', nomeEmpresa: '', saudacao: '', objetivo: 'Agendar Reunião', tipoConversao: 'Videochamada',
+    nomeAgente: '', nomeEmpresa: '', saudacao: '', objetivo: 'Agendamento', tipoConversao: 'Videochamada',
     papelHumano: '', restricoes: [] as string[], perguntasQualificacao: [] as { text: string, required: boolean }[],
     notificarEm: '', googleCalendarName: ''
   });
@@ -743,7 +751,9 @@ export default function App() {
     const dbPayload = {
       tenant_id: selectedClienteId, nome: formState.nome,
       descricao: formState.descricao || '', preco: formState.preco || 0,
-      estoque: formState.estoque || 0, imagem_url: finalImageUrl
+      estoque: formState.tipo === 'servico' ? 0 : (formState.estoque || 0),
+      imagem_url: finalImageUrl,
+      tipo: formState.tipo || 'produto'
     };
 
     let savedProduct: any;
@@ -760,12 +770,13 @@ export default function App() {
       await supabase.from('z_atendimento_conhecimento')
         .delete().filter('metadata->>id_ref', 'eq', savedProduct.id.toString());
 
-      const ragContent = `Produto: ${savedProduct.nome} | Descrição: ${savedProduct.descricao} | Preço: R$${savedProduct.preco} | Estoque: ${savedProduct.estoque}`;
+      const label = savedProduct.tipo === 'servico' ? 'Serviço' : 'Produto';
+      const ragContent = `${label}: ${savedProduct.nome} | Descrição: ${savedProduct.descricao} | Preço: R$${savedProduct.preco}${savedProduct.tipo === 'servico' ? ' | Disponibilidade: Sob Consulta (Serviço)' : ` | Estoque: ${savedProduct.estoque}`}`;
       const ragMetadata = {
         id_ref: savedProduct.id.toString(),
         tenant_id: selectedClienteId,
         source: `z_bd_produtos_${savedProduct.id}`, 
-        tipo: 'produto'
+        tipo: savedProduct.tipo || 'produto'
       };
 
       const { data: ragData, error: rError } = await supabase.from('z_atendimento_conhecimento')
@@ -788,6 +799,39 @@ export default function App() {
     setIsUploading(false);
     setIsModalOpen(false);
     fetchProdutos();
+  };
+
+  const deleteProduct = async (id: string) => {
+    if (!window.confirm("Deseja realmente excluir este produto? Isso também removerá o conhecimento da IA.")) return;
+    
+    setIsLoading(true);
+    try {
+      // 1. Deletar do RAG para evitar lixo semântico
+      await supabase.from('z_atendimento_conhecimento')
+        .delete().filter('metadata->>id_ref', 'eq', id.toString());
+
+      // 2. Notificar Webhook RAG da remoção
+      fetch(`${WEBHOOK_BASE}/webhook/rag-disponibilidades`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{
+          body: { record: { id_ref: id }, type: 'DELETE' }
+        }])
+      }).catch(err => console.error('Erro Webhook RAG Delete:', err));
+
+      // 3. Deletar o produto físico
+      const { error } = await supabase.from('z_bd_produtos').delete().eq('id', id);
+      
+      if (error) throw error;
+      
+      addToast("Produto excluído com sucesso!", "success");
+      fetchProdutos();
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao excluir produto.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const saveClient = async () => {
@@ -1190,7 +1234,7 @@ export default function App() {
               <div className="form-group">
                 <label>Objetivo</label>
                 <select value={aiSettings.objetivo} onChange={e => setAiSettings({...aiSettings, objetivo: e.target.value})}>
-                  <option value="Agendar Reunião">Agendar Reunião</option>
+                  <option value="Agendamento">Agendamento</option>
                   <option value="Venda Direta">Venda Direta</option>
                   <option value="Suporte Técnico">Suporte Técnico</option>
                   <option value="Qualificação Profunda">Qualificação Profunda</option>
@@ -1198,10 +1242,17 @@ export default function App() {
               </div>
               <div className="form-group">
                 <label>Tipo de Conversão</label>
-                <input type="text" value={aiSettings.tipoConversao} onChange={e => setAiSettings({...aiSettings, tipoConversao: e.target.value})} />
+                <select 
+                  value={aiSettings.tipoConversao} 
+                  onChange={e => setAiSettings({...aiSettings, tipoConversao: e.target.value})}
+                >
+                  {(conversaoOptions[aiSettings.objetivo] || []).map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
               </div>
 
-              {aiSettings.objetivo === "Agendar Reunião" && (
+              {aiSettings.objetivo === "Agendamento" && (
                 <div style={{ gridColumn: 'span 2', background: 'rgba(99, 102, 241, 0.05)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
                   <p style={{ fontSize: '0.8rem', marginBottom: '0.5rem' }}>Compartilhe sua agenda Google com: <strong>ismael.matias7622@gmail.com</strong></p>
                   <input type="text" value={aiSettings.googleCalendarName} onChange={e => setAiSettings({...aiSettings, googleCalendarName: e.target.value})} placeholder="Nome EXATO da Agenda" />
@@ -1210,9 +1261,113 @@ export default function App() {
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>O que a IA NÃO deve fazer (Restrições)</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input type="text" value={novaRestricao} onChange={e => setNovaRestricao(e.target.value)} onKeyPress={e => e.key === 'Enter' && setAiSettings(p => ({...p, restricoes: [...p.restricoes, novaRestricao]}))} />
-                  <button onClick={() => { setAiSettings(p => ({...p, restricoes: [...p.restricoes, novaRestricao]})); setNovaRestricao(''); }}>Add</button>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Não dar descontos sem autorização"
+                    value={novaRestricao} 
+                    onChange={e => setNovaRestricao(e.target.value)} 
+                    onKeyPress={e => {
+                      if (e.key === 'Enter' && novaRestricao.trim()) {
+                        setAiSettings(p => ({...p, restricoes: [...p.restricoes, novaRestricao.trim()]}));
+                        setNovaRestricao('');
+                      }
+                    }} 
+                  />
+                  <button className="btn-primary" onClick={() => { 
+                    if (novaRestricao.trim()) {
+                      setAiSettings(p => ({...p, restricoes: [...p.restricoes, novaRestricao.trim()]})); 
+                      setNovaRestricao(''); 
+                    }
+                  }}>Add</button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {aiSettings.restricoes.map((res, idx) => (
+                    <div key={idx} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      padding: '0.75rem 1rem', 
+                      background: 'rgba(255,255,255,0.03)', 
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)'
+                    }}>
+                      <span style={{ fontSize: '0.9rem' }}>
+                        <strong style={{ color: 'var(--accent-color)', marginRight: '8px' }}>{idx + 1}.</strong> {res}
+                      </span>
+                      <button 
+                        onClick={() => setAiSettings(p => ({...p, restricoes: p.restricoes.filter((_, i) => i !== idx)}))}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.7 }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Qualificação de Leads */}
+              <div className="form-group" style={{ gridColumn: 'span 2', marginTop: '1.5rem' }}>
+                <label>Qualificação de Leads (Perguntas que a IA deve fazer)</label>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Qual sua disponibilidade de investimento?"
+                    value={novaPergunta} 
+                    onChange={e => setNovaPergunta(e.target.value)} 
+                    onKeyPress={e => {
+                      if (e.key === 'Enter' && novaPergunta.trim()) {
+                        setAiSettings(p => ({...p, perguntasQualificacao: [...p.perguntasQualificacao, { text: novaPergunta.trim(), required: false }]}));
+                        setNovaPergunta('');
+                      }
+                    }} 
+                  />
+                  <button className="btn-primary" onClick={() => { 
+                    if (novaPergunta.trim()) {
+                      setAiSettings(p => ({...p, perguntasQualificacao: [...p.perguntasQualificacao, { text: novaPergunta.trim(), required: false }]})); 
+                      setNovaPergunta(''); 
+                    }
+                  }}>Add</button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {aiSettings.perguntasQualificacao.map((per, idx) => (
+                    <div key={idx} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      padding: '0.75rem 1rem', 
+                      background: per.required ? 'rgba(99, 102, 241, 0.05)' : 'rgba(255,255,255,0.03)', 
+                      borderRadius: '12px',
+                      border: per.required ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid var(--border-color)',
+                      transition: 'all 0.3s ease'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
+                        <span style={{ fontWeight: 700, color: 'var(--accent-color)' }}>Q{idx + 1}</span>
+                        <span style={{ fontSize: '0.9rem' }}>{per.text}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <button 
+                          className={per.required ? 'btn-primary' : 'btn-outline'}
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.7rem', textTransform: 'uppercase' }}
+                          onClick={() => {
+                            const newPerguntas = [...aiSettings.perguntasQualificacao];
+                            newPerguntas[idx].required = !newPerguntas[idx].required;
+                            setAiSettings({...aiSettings, perguntasQualificacao: newPerguntas});
+                          }}
+                        >
+                          {per.required ? 'Obrigatória' : 'Opcional'}
+                        </button>
+                        <button 
+                          onClick={() => setAiSettings(p => ({...p, perguntasQualificacao: p.perguntasQualificacao.filter((_, i) => i !== idx)}))}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.7 }}
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1436,50 +1591,117 @@ export default function App() {
   );
 
   if (view === 'inventory') return (
-    <div className="main-content" style={{ maxWidth: '1300px', margin: '0 auto', width: '100%', animation: 'fadeIn 0.5s ease' }}>
+    <div className="main-content" style={{ maxWidth: '1400px', margin: '0 auto', width: '100%', animation: 'fadeIn 0.5s ease' }}>
       <header className="header-actions" style={{ marginBottom: '3rem' }}>
         <div>
-          <h1 style={{ fontSize: '2.2rem', fontWeight: 800 }}>Estoque & RAG</h1>
-          <p className="subtitle">Gerencie o catálogo de produtos e treinamento vetorial</p>
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 800 }}>Estoque: {selectedCliente?.nome}</h1>
+          <p className="subtitle">Painel de Controle e Sincronia com RAG</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button className="btn-outline" onClick={() => setIsScrapeModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Globe size={18} /> Importar Site
+            <Globe size={18} /> Importar do Site
           </button>
-          <button className="btn-primary" onClick={() => { setEditingId(null); setFormState({nome:'',descricao:'',preco:0,estoque:0}); setIsModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={20} /> Adicionar Produto
+          <button className="btn-primary" onClick={() => { setEditingId(null); setFormState({nome:'',descricao:'',preco:0,estoque:0,tipo:'produto'}); setIsModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Plus size={20} /> Novo Produto
           </button>
-          <button className="btn-outline" onClick={() => setView('client-hub')}>Hub</button>
+          <button className="btn-outline" onClick={() => setView('client-hub')}>Voltar ao Menu</button>
         </div>
       </header>
 
-      <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-        {produtos.map(p => (
-          <div key={p.id} className="glass-panel product-card" onClick={() => { setEditingId(p.id); setFormState(p); setIsModalOpen(true); }}>
-            <div style={{ position: 'relative', height: '180px', overflow: 'hidden', borderRadius: '12px', marginBottom: '1rem' }}>
-              {p.imagemUrl ? (
-                <img src={p.imagemUrl} alt={p.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)' }}>
-                  <Package size={48} />
-                </div>
-              )}
-              <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
-                <div className={`stock-badge ${p.estoque > 5 ? 'stock-high' : p.estoque > 0 ? 'stock-low' : 'stock-out'}`} style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700 }}>
-                   {p.estoque > 0 ? `${p.estoque} EM ESTOQUE` : 'ESGOTADO'}
-                </div>
-              </div>
-            </div>
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{p.nome}</h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', height: '2.4rem' }}>
-              {p.descricao || 'Sem descrição cadastrada.'}
-            </p>
-            <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="price" style={{ fontSize: '1.4rem' }}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco)}</span>
-              <div style={{ background: 'rgba(255,255,255,0.05)', padding: '6px', borderRadius: '8px' }}><Settings size={16} /></div>
-            </div>
-          </div>
-        ))}
+      <div className="glass-panel table-container" style={{ padding: '0' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th>Tipo</th>
+              <th>Descrição</th>
+              <th>Preço (R$)</th>
+              <th>Estoque</th>
+              <th style={{ textAlign: 'center' }}>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {produtos.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>
+                  Nenhum produto cadastrado.
+                </td>
+              </tr>
+            ) : (
+              produtos.map(p => (
+                <tr key={p.id}>
+                  <td>
+                    <div className="product-cell">
+                      {p.imagemUrl ? (
+                        <img src={p.imagemUrl} alt={p.nome} className="product-image" />
+                      ) : (
+                        <div className="product-image" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)' }}>
+                          <Package size={20} opacity={0.3} />
+                        </div>
+                      )}
+                      <span style={{ fontWeight: 600 }}>{p.nome}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '4px',
+                      padding: '4px 10px', 
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      background: p.tipo === 'servico' ? 'rgba(99,102,241,0.1)' : 'rgba(16,185,129,0.1)',
+                      color: p.tipo === 'servico' ? '#818cf8' : '#34d399',
+                      border: `1px solid ${p.tipo === 'servico' ? 'rgba(99,102,241,0.2)' : 'rgba(16,185,129,0.2)'}`
+                    }}>
+                      {p.tipo === 'servico' ? <Settings size={12} /> : <Package size={12} />}
+                      {p.tipo === 'servico' ? 'Serviço' : 'Produto'}
+                    </div>
+                  </td>
+                  <td style={{ maxWidth: '300px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {p.descricao || '—'}
+                    </div>
+                  </td>
+                  <td>
+                    <span style={{ fontWeight: 500 }}>
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.preco)}
+                    </span>
+                  </td>
+                  <td>
+                    {p.tipo === 'servico' ? (
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', opacity: 0.5 }}>—</span>
+                    ) : (
+                      <div className={`stock-badge ${p.estoque > 5 ? 'stock-high' : p.estoque > 0 ? 'stock-low' : 'stock-out'}`}>
+                        {p.estoque} Unid.
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                      <button 
+                        className="btn-outline" 
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                        onClick={() => { setEditingId(p.id); setFormState(p); setIsModalOpen(true); }}
+                      >
+                        Editar
+                      </button>
+                      <button 
+                        className="btn-danger" 
+                        style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        onClick={() => deleteProduct(p.id)}
+                      >
+                        <Trash2 size={14} /> Excluir
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {isModalOpen && (
@@ -1498,13 +1720,38 @@ export default function App() {
                 <label>Descrição (será usada na RAG)</label>
                 <textarea rows={3} value={formState.descricao} onChange={e => setFormState({...formState, descricao: e.target.value})} />
               </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label>Tipo de Item</label>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button 
+                    className={formState.tipo === 'produto' ? 'btn-primary' : 'btn-outline'} 
+                    style={{ flex: 1, padding: '0.6rem' }} 
+                    onClick={() => setFormState({...formState, tipo: 'produto'})}
+                  >
+                    📦 Produto (Tem Estoque)
+                  </button>
+                  <button 
+                    className={formState.tipo === 'servico' ? 'btn-primary' : 'btn-outline'} 
+                    style={{ flex: 1, padding: '0.6rem' }} 
+                    onClick={() => setFormState({...formState, tipo: 'servico', estoque: 0})}
+                  >
+                    🛠️ Serviço (Sem Estoque)
+                  </button>
+                </div>
+              </div>
               <div className="form-group">
                 <label>Preço (R$)</label>
                 <input type="number" value={formState.preco} onChange={e => setFormState({...formState, preco: parseFloat(e.target.value)})} />
               </div>
               <div className="form-group">
-                <label>Estoque</label>
-                <input type="number" value={formState.estoque} onChange={e => setFormState({...formState, estoque: parseInt(e.target.value)})} />
+                <label>Estoque {formState.tipo === 'servico' && '(N/A)'}</label>
+                <input 
+                  type="number" 
+                  value={formState.estoque} 
+                  disabled={formState.tipo === 'servico'}
+                  onChange={e => setFormState({...formState, estoque: parseInt(e.target.value)})} 
+                  style={{ opacity: formState.tipo === 'servico' ? 0.5 : 1 }}
+                />
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label>Imagem do Produto</label>
