@@ -44,15 +44,15 @@ CREATE POLICY "Tenants só acessam suas próprias dúvidas" ON tb_duvidas
 -- =========================================================================
 
 -- Tabela RAG para Produtos
-CREATE TABLE IF NOT EXISTS atendimento_produtos (
+CREATE TABLE IF NOT EXISTS z_atendimento_produtos (
     id BIGSERIAL PRIMARY KEY,
     content TEXT NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     embedding vector(1536) -- Padrão OpenAI (text-embedding-ada-002 ou 3-small)
 );
 
--- Tabela RAG para Dúvidas
-CREATE TABLE IF NOT EXISTS atendimento_duvidas (
+-- Tabela RAG para Dúvidas (Mantendo padrão z_)
+CREATE TABLE IF NOT EXISTS z_atendimento_duvidas (
     id BIGSERIAL PRIMARY KEY,
     content TEXT NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -75,31 +75,35 @@ BEGIN
     -- Captura o ID da linha transacional sofrendo alteração
     IF TG_OP = 'DELETE' THEN v_RefId := OLD.id::text; ELSE v_RefId := NEW.id::text; END IF;
 
-    -- 1. Regra de Ouro: Purga o RAG antigo (Busca cross-JSONB para não poluir embeddings)
-    DELETE FROM atendimento_produtos WHERE metadata->>'id_ref' = v_RefId;
+    -- 1. Regra de Ouro: Purga o RAG antigo
+    DELETE FROM z_atendimento_produtos WHERE metadata->>'id_ref' = v_RefId;
 
-    -- 2. Se não era DELETE, recria a versão mais atualizada para a Inteligência Artificial ler
+    -- 2. Se não era DELETE, recria a versão mais atualizada
     IF TG_OP != 'DELETE' THEN
         -- Concatena de forma semântica/humana
         v_TextoContexto := concat('Produto: ', NEW.nome, '. Descrição: ', COALESCE(NEW.descricao, 'Não informada'), '. Preço: R$', NEW.preco, '. Estoque atual disponível: ', NEW.estoque, ' unidades.');
         
-        -- Multi-Tenant: Salva o tenant_id no metadata para filtrar na busca e não misturar dados
+        -- Multi-Tenant: Salva o tenant_id no metadata
         v_Metadata := jsonb_build_object(
             'id_ref', v_RefId,
             'tenant_id', NEW.tenant_id,
-            'source', concat('tb_produtos_', v_RefId),
+            'source', concat('z_bd_produtos_', v_RefId),
             'type', 'produto'
         );
 
-        -- Insere sem embedding, um Worker ou n8n ou SDK irá preencher a coluna "embedding" depois.
-        INSERT INTO atendimento_produtos (content, metadata) VALUES (v_TextoContexto, v_Metadata);
+        -- Insere no novo nome da tabela
+        INSERT INTO z_atendimento_produtos (content, metadata) VALUES (v_TextoContexto, v_Metadata);
     END IF;
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
+-- Trigger atualizado para monitorar z_bd_produtos
+DROP TRIGGER IF EXISTS trg_sync_produtos ON tb_produtos;
+DROP TRIGGER IF EXISTS trg_sync_produtos ON z_bd_produtos;
+
 CREATE TRIGGER trg_sync_produtos 
-AFTER INSERT OR UPDATE OR DELETE ON tb_produtos 
+AFTER INSERT OR UPDATE OR DELETE ON z_bd_produtos 
 FOR EACH ROW EXECUTE FUNCTION sync_atendimento_produtos_fn();
 
 
@@ -113,7 +117,7 @@ BEGIN
     IF TG_OP = 'DELETE' THEN v_RefId := OLD.id::text; ELSE v_RefId := NEW.id::text; END IF;
 
     -- Purga RAG Antigo
-    DELETE FROM atendimento_duvidas WHERE metadata->>'id_ref' = v_RefId;
+    DELETE FROM z_atendimento_duvidas WHERE metadata->>'id_ref' = v_RefId;
 
     IF TG_OP != 'DELETE' THEN
         v_TextoContexto := concat('Usuário pergunta: ', NEW.pergunta, ' | Resposta Oficial da Empresa: ', NEW.resposta);
@@ -121,24 +125,22 @@ BEGIN
         v_Metadata := jsonb_build_object(
             'id_ref', v_RefId,
             'tenant_id', NEW.tenant_id,
-            'source', concat('tb_duvidas_', v_RefId),
+            'source', concat('z_bd_duvidas_', v_RefId),
             'type', 'duvida'
         );
 
-        INSERT INTO atendimento_duvidas (content, metadata) VALUES (v_TextoContexto, v_Metadata);
+        INSERT INTO z_atendimento_duvidas (content, metadata) VALUES (v_TextoContexto, v_Metadata);
     END IF;
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_sync_duvidas 
-AFTER INSERT OR UPDATE OR DELETE ON tb_duvidas 
-FOR EACH ROW EXECUTE FUNCTION sync_atendimento_duvidas_fn();
+DROP TRIGGER IF EXISTS trg_sync_duvidas ON tb_duvidas;
+-- Se houver uma tabela z_bd_duvidas futuramente:
+-- CREATE TRIGGER trg_sync_duvidas AFTER INSERT OR UPDATE OR DELETE ON z_bd_duvidas FOR EACH ROW EXECUTE FUNCTION sync_atendimento_duvidas_fn();
 
 -- =========================================================================
--- 4. FUNÇÕES DE BUSCA VETORIAL ISOLADA POR TENANT (Para plugar na IA / LangChain)
--- Esta função garante que a IA busque SOMENTE os embeddings da Loja/Usuário atual.
--- Não mistura o RAG de Moto com a Floricultura.
+-- 4. FUNÇÕES DE BUSCA VETORIAL ISOLADA POR TENANT
 -- =========================================================================
 
 CREATE OR REPLACE FUNCTION buscar_produtos_rag(
@@ -162,9 +164,9 @@ BEGIN
     ap.content,
     ap.metadata,
     1 - (ap.embedding <=> query_embedding) AS similarity
-  FROM atendimento_produtos ap
+  FROM z_atendimento_produtos ap
   WHERE 
-    ap.metadata->>'tenant_id' = p_tenant_id::text -- FILTRO MANDATORIO ANTI-VAZAMENTO
+    ap.metadata->>'tenant_id' = p_tenant_id::text
     AND 1 - (ap.embedding <=> query_embedding) > match_threshold
   ORDER BY ap.embedding <=> query_embedding
   LIMIT match_count;

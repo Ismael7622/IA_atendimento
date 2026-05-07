@@ -6,10 +6,10 @@ import {
   AreaChart, Area 
 } from 'recharts';
 import { 
-  LayoutDashboard, MessageSquare, Users, Calendar, TrendingUp,
+  LayoutDashboard, MessageSquare,
   Trash2, LogOut, Plus, ArrowRight, ArrowLeft, User, Mail, Phone, Settings, Package,
   CheckCircle2, Globe, RefreshCw,
-  QrCode, Copy, Shield, Zap, Smartphone, HelpCircle, X, Trash
+  Copy, Shield, Zap, Smartphone, HelpCircle, X
 } from 'lucide-react';
 
 const WEBHOOK_BASE = import.meta.env.DEV ? '/webhook-api' : 'https://webhook.storyallday.com';
@@ -292,7 +292,6 @@ export default function App() {
   const [scrapeUrl, setScrapeUrl] = useState('');
   const [isScraping, setIsScraping] = useState(false);
   const [scrapedProducts, setScrapedProducts] = useState<any[]>([]);
-  const [selectedScrapedIndices, setSelectedScrapedIndices] = useState<number[]>([]);
 
   // AI Settings State
   const [aiSettings, setAiSettings] = useState({
@@ -302,7 +301,6 @@ export default function App() {
   });
   const [novaRestricao, setNovaRestricao] = useState('');
   const [novaPergunta, setNovaPergunta] = useState('');
-  const [novaPerguntaRequired, setNovaPerguntaRequired] = useState(false);
   const [isSavingAI, setIsSavingAI] = useState(false);
   const [showSuccessAI, setShowSuccessAI] = useState(false);
   const [isSavingNotificar, setIsSavingNotificar] = useState(false);
@@ -451,7 +449,8 @@ export default function App() {
       setProdutos(data.map(dbItem => ({
         id: dbItem.id, clienteId: dbItem.tenant_id, nome: dbItem.nome,
         descricao: dbItem.descricao, preco: Number(dbItem.preco),
-        estoque: Number(dbItem.estoque), imagemUrl: dbItem.imagem_url
+        estoque: Number(dbItem.estoque), imagemUrl: dbItem.imagem_url,
+        tipo: dbItem.tipo
       })));
     }
   };
@@ -632,7 +631,7 @@ export default function App() {
     });
   };
 
-  const checkInstancesStatus = async (silent = false) => {
+  const checkInstancesStatus = async () => {
     try {
       const response = await evolutionFetch('/instance/fetchInstances');
       const rawData = await response.json();
@@ -700,7 +699,7 @@ export default function App() {
         saudacao: data.saudacao || '', objetivo: data.objetivo || 'Agendar Reunião',
         tipoConversao: data.tipo_conversao || 'Videochamada', papelHumano: data.papel_humano || '',
         restricoes: data.restricoes || [], perguntasQualificacao: data.perguntas_qualificacao || [],
-        notificar_em: data.notificar_em || '', googleCalendarName: data.google_calendar_name || ''
+        notificarEm: data.notificar_em || '', googleCalendarName: data.google_calendar_name || ''
       });
     }
   };
@@ -975,7 +974,9 @@ export default function App() {
                 <input type="text" placeholder="Buscar contato..." className="search-input" value={contactSearch} onChange={e => setContactSearch(e.target.value)} />
               </div>
               <div className="chat-list">
-                {contacts.filter(c => !contactSearch || c.nomewpp.toLowerCase().includes(contactSearch.toLowerCase()) || c.phone.includes(contactSearch)).map(c => (
+                {isLoadingChat ? (
+                  <div style={{ padding: '2rem', textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }}></div></div>
+                ) : contacts.filter(c => !contactSearch || c.nomewpp.toLowerCase().includes(contactSearch.toLowerCase()) || c.phone.includes(contactSearch)).map(c => (
                   <div key={c.phone} className={`contact-item ${selectedPhone === c.phone ? 'active' : ''}`} onClick={() => setSelectedPhone(c.phone)}>
                     <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-color), #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 700, color: 'white' }}>
                       {c.nomewpp.charAt(0).toUpperCase()}
@@ -1189,8 +1190,8 @@ export default function App() {
                 placeholder="Número ou ID de Grupo"
               />
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                <button className="btn-outline" onClick={() => showGroups ? setShowGroups(false) : fetchGroups()} style={{ flex: 1 }}>
-                  {showGroups ? 'Fechar' : 'Buscar Grupos'}
+                <button className="btn-outline" onClick={() => showGroups ? setShowGroups(false) : fetchGroups()} style={{ flex: 1 }} disabled={isFetchingGroups}>
+                  {isFetchingGroups ? <span className="spinner" style={{ width: '14px', height: '14px' }}></span> : (showGroups ? 'Fechar' : 'Buscar Grupos')}
                 </button>
                 <button className="btn-primary" onClick={() => saveAISettings(true)} disabled={isSavingNotificar} style={{ flex: 1 }}>
                   {isSavingNotificar ? <span className="spinner"></span> : 'Salvar'}
@@ -1413,6 +1414,7 @@ export default function App() {
   );
 
   // --- MAIN RETURN ---
+  if (isLoadingAuth) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#09090b' }}><div className="spinner" style={{ width: '40px', height: '40px', borderTopColor: 'var(--accent-color)' }}></div></div>;
   if (!isLoggedIn) return <Auth onLoginSuccess={(email) => { setUserEmail(email); setIsLoggedIn(true); }} />;
 
   if (view === 'home') return (
@@ -1811,6 +1813,21 @@ export default function App() {
     <div className="layout-wrapper">
       <Sidebar />
       {view === 'conversas' ? renderConversasView() : view === 'config' ? renderConfigView() : <div>View não encontrada</div>}
+      
+      {/* Toast Container */}
+      <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', zIndex: 9999 }}>
+        {toasts.map(t => (
+          <div key={t.id} className={`glass-panel toast ${t.type}`} style={{ 
+            padding: '1rem 1.5rem', 
+            borderRadius: '12px', 
+            boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+            borderLeft: `4px solid ${t.type === 'success' ? '#10b981' : '#f59e0b'}`,
+            animation: 'slideIn 0.3s ease-out'
+          }}>
+            {t.message}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
