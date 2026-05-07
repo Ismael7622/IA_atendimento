@@ -9,7 +9,7 @@ import {
   LayoutDashboard, MessageSquare,
   Trash2, LogOut, Plus, ArrowRight, ArrowLeft, User, Mail, Phone, Settings, Package,
   CheckCircle2, Globe, RefreshCw,
-  Copy, Shield, Zap, Smartphone, HelpCircle, X
+  Copy, Shield, Zap, Smartphone, HelpCircle, X, MoreVertical
 } from 'lucide-react';
 
 const WEBHOOK_BASE = import.meta.env.DEV ? '/webhook-api' : 'https://webhook.storyallday.com';
