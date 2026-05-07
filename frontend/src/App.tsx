@@ -286,6 +286,7 @@ export default function App() {
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [qrTimeLeft, setQrTimeLeft] = useState(30);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Scraping State
   const [isScrapeModalOpen, setIsScrapeModalOpen] = useState(false);
@@ -1252,11 +1253,52 @@ export default function App() {
                   ))}
                 </select>
               </div>
+              <div className="form-group">
+                <label>Papel do Humano</label>
+                <input 
+                  type="text" 
+                  value={aiSettings.papelHumano} 
+                  onChange={e => setAiSettings({...aiSettings, papelHumano: e.target.value})} 
+                  placeholder="Ex: Consultor Especialista"
+                />
+              </div>
 
               {aiSettings.objetivo === "Agendamento" && (
-                <div style={{ gridColumn: 'span 2', background: 'rgba(99, 102, 241, 0.05)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
-                  <p style={{ fontSize: '0.8rem', marginBottom: '0.5rem' }}>Compartilhe sua agenda Google com: <strong>ismael.matias7622@gmail.com</strong></p>
-                  <input type="text" value={aiSettings.googleCalendarName} onChange={e => setAiSettings({...aiSettings, googleCalendarName: e.target.value})} placeholder="Nome EXATO da Agenda" />
+                <div style={{ gridColumn: 'span 2', background: 'rgba(99, 102, 241, 0.05)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                  <h4 style={{ margin: '0 0 1rem 0', color: 'var(--accent-color)' }}>Passos para conectar sua agenda:</h4>
+                  <ol style={{ paddingLeft: '1.2rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem', color: '#e2e8f0' }}>
+                    <li>Compartilhe sua agenda Google com: <strong>ismael.matias7622@gmail.com</strong></li>
+                    <li>Informe ao admin que compartilhou a agenda.</li>
+                    <li>Após a confirmação do admin, siga para o passo 4.</li>
+                    <li>
+                      Clique em "3 pontinhos" (<MoreVertical size={14} style={{ display: 'inline', verticalAlign: 'middle' }} />) ao lado do nome da agenda, em seguida clique em <strong>"Configurações e compart."</strong>
+                      <div style={{ marginTop: '0.25rem' }}>
+                        <button type="button" onClick={() => setPreviewImage('/anexo3.png')} style={{ background: 'none', border: 'none', color: '#60a5fa', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: '0.85rem' }}>
+                          veja a imagem do dado esperado clicando aqui
+                        </button>
+                      </div>
+                    </li>
+                    <li>
+                      No canto esquerdo, abaixo do nome da agenda, clique em <strong>"Integrar agenda"</strong>
+                      <div style={{ marginTop: '0.25rem' }}>
+                        <button type="button" onClick={() => setPreviewImage('/anexo4.png')} style={{ background: 'none', border: 'none', color: '#60a5fa', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: '0.85rem' }}>
+                          veja a imagem do dado esperado clicando aqui
+                        </button>
+                      </div>
+                    </li>
+                    <li>
+                      Copie no campo abaixo o <strong>ID da agenda</strong> (primeiro campo que aparece ao entrar na tela "Integrar agenda")
+                      <div style={{ marginTop: '0.25rem' }}>
+                        <button type="button" onClick={() => setPreviewImage('/anexo2.png')} style={{ background: 'none', border: 'none', color: '#60a5fa', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: '0.85rem' }}>
+                          veja a imagem do dado esperado clicando aqui
+                        </button>
+                      </div>
+                    </li>
+                  </ol>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>ID da Agenda Google</label>
+                    <input type="text" value={aiSettings.googleCalendarName} onChange={e => setAiSettings({...aiSettings, googleCalendarName: e.target.value})} placeholder="Ex: c_abc123@group.calendar.google.com" />
+                  </div>
                 </div>
               )}
 
@@ -1374,6 +1416,22 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* Modal de Preview de Imagem */}
+        {previewImage && (
+          <div className="modal-overlay" onClick={() => setPreviewImage(null)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+            <div className="glass-panel modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '80vw', maxHeight: '90vh', padding: '1rem', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
+                <button onClick={() => setPreviewImage(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', borderRadius: '50%', padding: '0.5rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <X size={20} />
+                </button>
+              </div>
+              <div style={{ overflow: 'auto', display: 'flex', justifyContent: 'center' }}>
+                <img src={previewImage} alt="Preview" style={{ maxWidth: '100%', maxHeight: 'calc(90vh - 80px)', objectFit: 'contain', borderRadius: '8px' }} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
