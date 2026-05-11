@@ -1,5 +1,6 @@
-﻿import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { createClient } from '@supabase/supabase-js'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -12,7 +13,76 @@ export default defineConfig(({ mode }) => {
         name: 'chat-treinamento-api',
         configureServer(server) {
           server.middlewares.use(async (req, res, next) => {
-            if (req.url === '/api/chat-treinamento' && req.method === 'POST') {
+            if (req.url === '/api/rag-search' && req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', async () => {
+                try {
+                  const { query, tenantId, matchCount = 8 } = JSON.parse(body);
+                  const openAiKey = env.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+                  const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+                  const supabaseKey =
+                    env.SUPABASE_SERVICE_ROLE_KEY ||
+                    env.SUPABASE_ANON_KEY ||
+                    env.VITE_SUPABASE_ANON_KEY ||
+                    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+                    process.env.SUPABASE_ANON_KEY ||
+                    process.env.VITE_SUPABASE_ANON_KEY;
+
+                  if (!query || !tenantId) {
+                    res.statusCode = 400;
+                    res.end(JSON.stringify({ error: 'Missing query or tenantId' }));
+                    return;
+                  }
+
+                  if (!openAiKey || !supabaseUrl || !supabaseKey) {
+                    res.statusCode = 500;
+                    res.end(JSON.stringify({ error: 'RAG search environment not configured' }));
+                    return;
+                  }
+
+                  const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${openAiKey}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      model: 'text-embedding-3-small',
+                      input: query
+                    })
+                  });
+
+                  const embeddingData = await embeddingResponse.json() as any;
+                  if (!embeddingResponse.ok) {
+                    throw new Error(embeddingData.error?.message || 'Erro ao gerar embedding');
+                  }
+
+                  const supabase = createClient(supabaseUrl, supabaseKey);
+                  const { data, error } = await supabase.rpc('match_conhecimento', {
+                    query_embedding: embeddingData.data?.[0]?.embedding,
+                    match_count: matchCount,
+                    filter: { tenant_id: tenantId }
+                  });
+
+                  if (error) throw error;
+
+                  console.log('[RAG match_conhecimento]', {
+                    tenantId,
+                    query,
+                    matches: data?.length || 0,
+                    topSimilarity: data?.[0]?.similarity
+                  });
+
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ matches: data || [] }));
+                } catch (err: any) {
+                  console.error('[RAG match_conhecimento] Erro:', err.message);
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ error: err.message || 'Erro ao consultar RAG' }));
+                }
+              });
+            } else if (req.url === '/api/chat-treinamento' && req.method === 'POST') {
               let body = '';
               req.on('data', chunk => { body += chunk; });
               req.on('end', async () => {
@@ -21,13 +91,19 @@ export default defineConfig(({ mode }) => {
                   const apiKey = env.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
                   const mcpUrl = 'https://webhook.storyallday.com/mcp/agendamento';
 
-                  console.log('\n--- ðŸ¤– INICIANDO CHAMADA SANDBOX ---');
+                  console.log('\n--- 🤖 INICIANDO CHAMADA SANDBOX ---');
                   console.log('Pergunta:', userMessage);
+                  const ragPreview = systemPrompt.match(/Mensagem ou instrução anterior:\s*"([\s\S]*?)"\s*Ação indicada:/)?.[1]?.trim();
+                  if (ragPreview) {
+                    console.log('📚 RAG no prompt:', ragPreview.slice(0, 220).replace(/\s+/g, ' '));
+                  } else {
+                    console.log('📚 RAG no prompt: não identificado');
+                  }
 
                   if (!apiKey) {
-                    console.error('âŒ ERRO: OPENAI_API_KEY nÃ£o configurada');
+                    console.error('❌ ERRO: OPENAI_API_KEY não configurada');
                     res.statusCode = 500;
-                    res.end(JSON.stringify({ error: 'OPENAI_API_KEY nÃ£o configurada' }));
+                    res.end(JSON.stringify({ error: 'OPENAI_API_KEY não configurada' }));
                     return;
                   }
 
@@ -84,10 +160,10 @@ export default defineConfig(({ mode }) => {
                     }
                   ];
 
-                  // FunÃ§Ã£o auxiliar para limpar resposta SSE do n8n
+                  // Função auxiliar para limpar resposta SSE do n8n
                   const parseMCPResponse = async (response: Response) => {
                     const text = await response.text();
-                    console.log(`ðŸ“¦ Resposta RAW do n8n:`, text.substring(0, 150) + '...');
+                    console.log(`📦 Resposta RAW do n8n:`, text.substring(0, 150) + '...');
 
                     const dataLines = text
                       .split(/\r?\n/)
@@ -158,7 +234,7 @@ export default defineConfig(({ mode }) => {
 
                   while (maxIter > 0) {
                     maxIter--;
-                    console.log(`ðŸ“¡ Chamando OpenAI (IteraÃ§Ã£o ${6 - maxIter})...`);
+                    console.log(`📡 Chamando OpenAI (Iteração ${6 - maxIter})...`);
 
                     const response = await fetch('https://api.openai.com/v1/chat/completions', {
                       method: 'POST',
@@ -179,14 +255,14 @@ export default defineConfig(({ mode }) => {
 
                     const data = await response.json() as any;
                     if (!response.ok) {
-                      console.error('âŒ Erro OpenAI:', data.error?.message);
+                      console.error('❌ Erro OpenAI:', data.error?.message);
                       throw new Error(data.error?.message || 'Erro na OpenAI');
                     }
 
                     const message = data.choices[0].message;
 
                     if (message.tool_calls) {
-                      console.log('ðŸ› ï¸ IA solicitou uso de ferramentas:', message.tool_calls.map((tc: any) => tc.function.name).join(', '));
+                      console.log('🛠️ IA solicitou uso de ferramentas:', message.tool_calls.map((tc: any) => tc.function.name).join(', '));
                       messages.push(message);
 
                       for (const toolCall of message.tool_calls) {
@@ -196,10 +272,10 @@ export default defineConfig(({ mode }) => {
                           ? `${toolName}:${args.Calendar}|${args.Start}|${args.End}|${args.Summary}`
                           : '';
 
-                        console.log(`ðŸ”Œ Chamando n8n -> ${toolName}...`);
+                        console.log(`🔌 Chamando n8n -> ${toolName}...`);
 
                         if (cacheKey && toolResultCache.has(cacheKey)) {
-                          console.log('â™»ï¸ Evento jÃ¡ criado nesta rodada; reutilizando retorno anterior.');
+                          console.log('♻️ Evento já criado nesta rodada; reutilizando retorno anterior.');
                           messages.push({
                             role: 'tool',
                             tool_call_id: toolCall.id,
@@ -208,7 +284,7 @@ export default defineConfig(({ mode }) => {
                           });
                           messages.push({
                             role: 'system',
-                            content: 'O evento solicitado jÃ¡ foi criado nesta mesma rodada. NÃ£o chame criar_evento novamente para o mesmo horÃ¡rio; continue o fluxo normal e responda ao cliente.'
+                            content: 'O evento solicitado já foi criado nesta mesma rodada. Não chame criar_evento novamente para o mesmo horário; continue o fluxo normal e responda ao cliente.'
                           });
                           continue;
                         }
@@ -223,7 +299,7 @@ export default defineConfig(({ mode }) => {
                           };
 
                           // 1. PASSO: INITIALIZE
-                          console.log(`ðŸ¤ Inicializando conexÃ£o MCP...`);
+                          console.log(`🤝 Inicializando conexão MCP...`);
                           let sessionCookies = '';
                           let sessionId = '';
 
@@ -249,7 +325,7 @@ export default defineConfig(({ mode }) => {
                           if (mcpSessionId) sessionId = mcpSessionId;
 
                           await parseMCPResponse(initRes);
-                          console.log(`âœ… Identificado.`);
+                          console.log(`✅ Identificado.`);
 
                           const sessionHeaders: Record<string, string> = {
                             ...commonHeaders,
@@ -267,11 +343,11 @@ export default defineConfig(({ mode }) => {
                               params: {}
                             })
                           }).catch(() => {
-                            // Algumas implementaÃƒÂ§ÃƒÂµes fecham a resposta de notificaÃƒÂ§ÃƒÂ£o sem corpo.
+                            // Algumas implementaÃ§Ãµes fecham a resposta de notificaÃ§Ã£o sem corpo.
                           });
 
                           // 2. PASSO: CHAMADA REAL DA TOOL
-                          console.log(`ðŸ”Œ Executando: ${toolName}...`);
+                          console.log(`🔌 Executando: ${toolName}...`);
                           const mcpResponse = await fetch(mcpUrl, {
                             method: 'POST',
                             headers: sessionHeaders,
@@ -291,7 +367,7 @@ export default defineConfig(({ mode }) => {
                           if (mcpData.result && mcpData.result.content) {
                             toolContent = JSON.stringify(mcpData.result.content);
                           } else if (mcpData.error) {
-                            console.error(`âš ï¸ Erro no n8n:`, mcpData.error.message);
+                            console.error(`⚠️ Erro no n8n:`, mcpData.error.message);
                             toolContent = JSON.stringify({ error: mcpData.error.message });
                           } else {
                             toolContent = JSON.stringify(mcpData.result || mcpData);
@@ -305,7 +381,7 @@ export default defineConfig(({ mode }) => {
                           });
                           if (cacheKey) toolResultCache.set(cacheKey, toolContent);
                         } catch (err: any) {
-                          console.error(`âš ï¸ Erro na tool ${toolName}:`, err.message);
+                          console.error(`⚠️ Erro na tool ${toolName}:`, err.message);
                           messages.push({
                             role: 'tool',
                             tool_call_id: toolCall.id,
@@ -318,7 +394,7 @@ export default defineConfig(({ mode }) => {
                     }
 
                     finalResponse = message.content || '';
-                    console.log('ðŸ Resposta final gerada.');
+                    console.log('🏁 Resposta final gerada.');
                     break;
                   }
 
@@ -350,7 +426,7 @@ export default defineConfig(({ mode }) => {
                   res.setHeader('Content-Type', 'application/json');
                   res.end(JSON.stringify({ output: finalResponse }));
                 } catch (err: any) {
-                  console.error('ðŸ’¥ ERRO FATAL NO PROXY:', err.message);
+                  console.error('💥 ERRO FATAL NO PROXY:', err.message);
                   res.statusCode = 500;
                   res.end(JSON.stringify({ error: err.message || 'Erro interno no servidor' }));
                 }

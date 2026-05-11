@@ -95,10 +95,10 @@ export const buildLocalRagDecision = (params: {
     razao: hasContext
       ? 'Classificação feita com base na mensagem e nos trechos recuperados da base de conhecimento.'
       : 'Classificação feita pela intenção da mensagem; nenhum trecho específico do RAG foi encontrado.',
-    mensagem_exemplo: action === 'Agendamento'
-      ? 'Consigo seguir com o agendamento sim. Vou verificar os melhores horários para você.'
-      : hasContext
-        ? params.ragContext
+    mensagem_exemplo: hasContext
+      ? params.ragContext
+      : action === 'Agendamento'
+        ? 'Consigo seguir com o agendamento sim. Vou verificar os melhores horários para você.'
         : 'Entendi. Vou seguir o atendimento de forma natural com base no que você me contou.',
     links_midia: []
   };

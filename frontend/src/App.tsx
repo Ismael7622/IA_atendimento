@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'react';
 import { supabase } from './lib/supabase';
 import { Auth } from './components/Auth';
 import { buildN8nSandboxPrompt } from './sandbox/n8nPromptMirror';
@@ -17,7 +17,7 @@ import {
 
 const WEBHOOK_BASE = import.meta.env.DEV ? '/webhook-api' : 'https://webhook.storyallday.com';
 
-// --- COMPONENTE DA PÃGINA EXTERNA DE QR CODE ---
+// --- COMPONENTE DA PÁGINA EXTERNA DE QR CODE ---
 const QRCodeGenPage = ({ instanceName }: { instanceName: string }) => {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -91,7 +91,7 @@ const QRCodeGenPage = ({ instanceName }: { instanceName: string }) => {
           Conectar WhatsApp
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
-          InstÃ¢ncia: <span style={{ color: 'var(--accent-color)', fontWeight: 600 }}>{instanceName}</span>
+          Instância: <span style={{ color: 'var(--accent-color)', fontWeight: 600 }}>{instanceName}</span>
         </p>
       </div>
 
@@ -106,7 +106,7 @@ const QRCodeGenPage = ({ instanceName }: { instanceName: string }) => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '2.5rem' }}>
           <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1.25rem 0.5rem', borderRadius: '16px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
             <Zap size={24} color="var(--accent-color)" style={{ margin: '0 auto 0.75rem' }} />
-            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8' }}>RÃ¡pido</p>
+            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8' }}>Rápido</p>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1.25rem 0.5rem', borderRadius: '16px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
             <Shield size={24} color="#10b981" style={{ margin: '0 auto 0.75rem' }} />
@@ -120,7 +120,7 @@ const QRCodeGenPage = ({ instanceName }: { instanceName: string }) => {
 
         {!qrCode && !loading ? (
           <button className="btn-primary" style={{ width: '100%', padding: '1.5rem', borderRadius: '16px', fontSize: '1.1rem', fontWeight: 700 }} onClick={fetchQRCode}>
-            ComeÃ§ar ConexÃ£o
+            Começar Conexão
           </button>
         ) : loading ? (
           <div style={{ textAlign: 'center', padding: '3rem 0' }}>
@@ -146,17 +146,17 @@ const QRCodeGenPage = ({ instanceName }: { instanceName: string }) => {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
                 <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--accent-color)', color: 'white', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>2</div>
-                <p style={{ fontSize: '0.95rem', color: '#f1f5f9', fontWeight: 500 }}>VÃ¡ em ConfiguraÃ§Ãµes &gt; Aparelhos</p>
+                <p style={{ fontSize: '0.95rem', color: '#f1f5f9', fontWeight: 500 }}>Vá em Configurações &gt; Aparelhos</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--accent-color)', color: 'white', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>3</div>
-                <p style={{ fontSize: '0.95rem', color: '#f1f5f9', fontWeight: 500 }}>Escaneie este cÃ³digo QR</p>
+                <p style={{ fontSize: '0.95rem', color: '#f1f5f9', fontWeight: 500 }}>Escaneie este código QR</p>
               </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.1)', padding: '0.75rem', borderRadius: '12px' }}>
               <RefreshCw size={16} className="spin-slow" />
-              <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>O cÃ³digo expira em {timeLeft} segundos</span>
+              <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>O código expira em {timeLeft} segundos</span>
             </div>
           </div>
         )}
@@ -164,11 +164,11 @@ const QRCodeGenPage = ({ instanceName }: { instanceName: string }) => {
 
       <div style={{ marginTop: '3rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
         <button className="btn-outline" style={{ borderRadius: '12px', padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255,255,255,0.02)' }} onClick={() => window.open('https://storyallday.com', '_blank')}>
-          <HelpCircle size={20} /> Precisa de suporte tÃ©cnico?
+          <HelpCircle size={20} /> Precisa de suporte técnico?
         </button>
 
         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.6rem', opacity: 0.8 }}>
-          <Shield size={14} color="#10b981" /> Protocolo de seguranÃ§a ponta-a-ponta Evolution API
+          <Shield size={14} color="#10b981" /> Protocolo de segurança ponta-a-ponta Evolution API
         </p>
       </div>
 
@@ -225,14 +225,14 @@ type ClientStatus = {
 };
 
 const conversaoOptions: Record<string, string[]> = {
-  'Agendamento':          ['Videochamada', 'Visita Presencial', 'LigaÃ§Ã£o TelefÃ´nica', 'Agendamento de ServiÃ§o'],
-  'Venda Direta':         ['Link de Pagamento', 'TransferÃªncia PIX', 'Falar com Vendedor'],
-  'Suporte TÃ©cnico':      ['QualificaÃ§Ã£o e Abertura de Chamado', 'Base de Conhecimento', 'Falar com Especialista'],
-  'QualificaÃ§Ã£o Profunda':['FormulÃ¡rio de QualificaÃ§Ã£o', 'Encaminhar para SDR', 'Score de Lead']
+  'Agendamento':          ['Videochamada', 'Visita Presencial', 'Ligação Telefônica', 'Agendamento de Serviço'],
+  'Venda Direta':         ['Link de Pagamento', 'Transferência PIX', 'Falar com Vendedor'],
+  'Suporte Técnico':      ['Qualificação e Abertura de Chamado', 'Base de Conhecimento', 'Falar com Especialista'],
+  'Qualificação Profunda':['Formulário de Qualificação', 'Encaminhar para SDR', 'Score de Lead']
 };
 
 export default function App() {
-  // DetecÃ§Ã£o de Rota Externa para QR Code
+  // Detecção de Rota Externa para QR Code
   const isQRCodeGen = window.location.pathname.startsWith('/qrcodegen/');
   const qrInstanceFromUrl = isQRCodeGen ? window.location.pathname.split('/').pop() : null;
 
@@ -282,7 +282,7 @@ export default function App() {
   const [teachingData, setTeachingData] = useState({ objection: '', answer: '', messageId: '' });
   const [taughtMessageIds, setTaughtMessageIds] = useState<string[]>([]);
 
-  // InstÃ¢ncias/Evolution State
+  // Instâncias/Evolution State
   const [instanceStatuses, setInstanceStatuses] = useState<Record<string, 'conectado' | 'desconectado'>>({});
   const [instanceProfiles, setInstanceProfiles] = useState<Record<string, string>>({});
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -369,7 +369,7 @@ export default function App() {
 
   useEffect(() => {
     if (showTrainingChat && selectedClienteId) {
-      // Chat de treinamento agora Ã© apenas em memÃ³ria
+      // Chat de treinamento agora é apenas em memória
       if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [showTrainingChat, trainingMessages]);
@@ -521,7 +521,7 @@ export default function App() {
 
     if (data) {
       setMessages(data);
-      // Busca quais dessas mensagens jÃ¡ foram ensinadas no RAG
+      // Busca quais dessas mensagens já foram ensinadas no RAG
       const { data: taught } = await supabase
         .from('z_atendimento_conhecimento')
         .select('metadata')
@@ -572,15 +572,20 @@ export default function App() {
     }
   };
 
+  const openTeachingModal = (objection: string, messageId: string) => {
+    setTeachingData({ objection, answer: '', messageId });
+    setShowTeachingModal(true);
+  };
+
   const saveTeaching = async () => {
     if (!teachingData.objection || !teachingData.answer) return;
     setIsLoading(true);
 
-    // Garantir que o id_ref seja uma string Ãºnica
+    // Garantir que o id_ref seja uma string única
     const idRef = (teachingData.messageId || `teach_${Date.now()}`).toString();
-    const ragContent = `DÃšVIDA/OBJEÃ‡ÃƒO: ${teachingData.objection} | RESPOSTA IDEAL: ${teachingData.answer}`;
+    const ragContent = `DÚVIDA/OBJEÇÃO: ${teachingData.objection} | RESPOSTA IDEAL: ${teachingData.answer}`;
 
-    // Metadata limpo conforme o guia, sem duplicar o tenant_id que jÃ¡ vai no topo
+    // Metadata limpo conforme o guia, sem duplicar o tenant_id que já vai no topo
     const ragMetadata = {
       id_ref: idRef,
       tenant_id: selectedClienteId,
@@ -715,7 +720,7 @@ export default function App() {
     if (data) {
       setAiSettings({
         nomeAgente: data.nome_agente || '', nomeEmpresa: data.nome_empresa || '',
-        saudacao: data.saudacao || '', objetivo: data.objetivo || 'Agendar ReuniÃ£o',
+        saudacao: data.saudacao || '', objetivo: data.objetivo || 'Agendar Reunião',
         tipoConversao: data.tipo_conversao || 'Videochamada', papelHumano: data.papel_humano || '',
         restricoes: data.restricoes || [], perguntasQualificacao: data.perguntas_qualificacao || [],
         notificarEm: data.notificar_em || '', googleCalendarName: data.google_calendar_name || ''
@@ -733,7 +738,7 @@ export default function App() {
         body: JSON.stringify({ instance: selectedCliente.instance_name })
       });
       if (response.ok) {
-        addToast("DesconexÃ£o enviada!", "success");
+        addToast("Desconexão enviada!", "success");
         setTimeout(() => {
           checkInstanceStatus(selectedClienteId, selectedCliente.instance_name!);
           setIsDisconnecting(false);
@@ -771,7 +776,7 @@ export default function App() {
         .toUpperCase();
     };
 
-    // Dados dinÃ¢micos simulando o nÃ³ do n8n
+    // Dados dinâmicos simulando o nó do n8n
     const objetivo = aiSettings.objetivo;
     const tipoConversao = aiSettings.tipoConversao;
     const googleCalendarName = aiSettings.googleCalendarName || 'primary';
@@ -779,7 +784,7 @@ export default function App() {
     const telefoneCliente = `sandbox:${selectedClienteId || 'treinamento'}`;
     const idSupabase = selectedClienteId || '';
 
-    // Datas/Horas (AmÃ©rica/Fortaleza)
+    // Datas/Horas (América/Fortaleza)
     const agora = new Date();
     const formatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Fortaleza', hour: '2-digit', minute: '2-digit', hour12: false });
     const horaAtual = formatter.format(agora);
@@ -798,27 +803,27 @@ export default function App() {
 
 ### PROTOCOLO DE AGENDAMENTO
 
-Seu objetivo Ã© conduzir o cliente para um agendamento.
+Seu objetivo é conduzir o cliente para um agendamento.
 
-VocÃª deve:
+Você deve:
 1. Entender rapidamente o interesse do cliente.
-2. Usar os dados que jÃ¡ possui: Nome (${nomeCliente}) e Telefone (${telefoneCliente}).
-3. Consultar disponibilidade na agenda antes de sugerir horÃ¡rios.
-4. Oferecer no mÃ¡ximo 2 opÃ§Ãµes de horÃ¡rio por vez.
+2. Usar os dados que já possui: Nome (${nomeCliente}) e Telefone (${telefoneCliente}).
+3. Consultar disponibilidade na agenda antes de sugerir horários.
+4. Oferecer no máximo 2 opções de horário por vez.
 5. Confirmar a escolha do cliente antes de criar o evento.
-6. SÃ³ confirmar o agendamento depois que a ferramenta retornar sucesso ou EventId.
+6. Só confirmar o agendamento depois que a ferramenta retornar sucesso ou EventId.
 
 Regras:
-- VocÃª jÃ¡ possui o telefone do cliente (${telefoneCliente}), NUNCA pergunte novamente.
-- Este atendimento Ã© uma sandbox interna; mantenha o telefone exatamente como "${telefoneCliente}" e nÃ£o substitua por nÃºmero real, nÃºmero genÃ©rico ou telefone da empresa.
-- NUNCA peÃ§a nenhum tipo de identificador, cÃ³digo de confirmaÃ§Ã£o ou senha ao cliente.
-- vocÃª deve ter a iniciativa de dizer os horÃ¡rios disponiveis de agendamento, e nÃ£o esperar do cliente que ele escolha sem antes dar as opÃ§Ãµes
-- Nunca invente horÃ¡rios.
+- Você já possui o telefone do cliente (${telefoneCliente}), NUNCA pergunte novamente.
+- Este atendimento é uma sandbox interna; mantenha o telefone exatamente como "${telefoneCliente}" e não substitua por número real, número genérico ou telefone da empresa.
+- NUNCA peça nenhum tipo de identificador, código de confirmação ou senha ao cliente.
+- você deve ter a iniciativa de dizer os horários disponiveis de agendamento, e não esperar do cliente que ele escolha sem antes dar as opções
+- Nunca invente horários.
 - Nunca agende no passado.
-- Nunca confirme agendamento sem usar a ferramenta de calendÃ¡rio.
-- Nunca ofereÃ§a mais de 2 horÃ¡rios por mensagem.
-- Se o cliente pedir outro horÃ¡rio, consulte novamente a agenda.
-- Se houver restriÃ§Ã£o de dia ou horÃ¡rio, respeite as restriÃ§Ãµes listadas abaixo.
+- Nunca confirme agendamento sem usar a ferramenta de calendário.
+- Nunca ofereça mais de 2 horários por mensagem.
+- Se o cliente pedir outro horário, consulte novamente a agenda.
+- Se houver restrição de dia ou horário, respeite as restrições listadas abaixo.
 
 ---
 
@@ -830,23 +835,23 @@ Quando o cliente quiser agendar:
    - Calendar: "${googleCalendarName}"
    - After: ${isoAgora} (hora atual se for hoje)
    - Before: ${isoFimDia} (fim do dia)
-   - Para outros dias: inÃ­cio e fim daquele dia especÃ­fico
+   - Para outros dias: início e fim daquele dia específico
 
-2. Se retornar [] (array vazio) = calendÃ¡rio livre, todos os horÃ¡rios disponÃ­veis.
+2. Se retornar [] (array vazio) = calendário livre, todos os horários disponíveis.
 
 3. Calcule os slots livres:
-   - HorÃ¡rio permitido: 7h30 atÃ© 20h.
-   - Remova horÃ¡rios ocupados.
-   - Considere buffer de 30 minutos antes de evento jÃ¡ existente.
-   - Nunca ofereÃ§a horÃ¡rio passado.
+   - Horário permitido: 7h30 até 20h.
+   - Remova horários ocupados.
+   - Considere buffer de 30 minutos antes de evento já existente.
+   - Nunca ofereça horário passado.
 
-4. OfereÃ§a EXATAMENTE 2 opÃ§Ãµes:
-"Prefere Ã s Xh ou Ã s Yh?"
+4. Ofereça EXATAMENTE 2 opções:
+"Prefere às Xh ou às Yh?"
 
-Regras crÃ­ticas:
-- PROIBIDO sugerir horÃ¡rios sem chamar listar_eventos.
+Regras críticas:
+- PROIBIDO sugerir horários sem chamar listar_eventos.
 - PROIBIDO sugerir horas passadas.
-- Agora sÃ£o ${horaAtual}.
+- Agora são ${horaAtual}.
 
 ---
 
@@ -856,13 +861,13 @@ Aguarde a escolha do cliente.
 
 Depois que ele escolher, confirme de forma curta:
 
-"Ã“timo, vou confirmar Ã s Xh!"
+"Ótimo, vou confirmar às Xh!"
 
 ---
 
 ## ETAPA 3: CRIAR EVENTO
 
-ApÃ³s confirmaÃ§Ã£o do cliente, como:
+Após confirmação do cliente, como:
 - sim
 - pode
 - confirma
@@ -884,20 +889,20 @@ Depois:
 2. CHAME confirmar_status_agendado via agendamentos para mudar o status do cliente no banco de dados.
 3. Use id do supabase : ${idSupabase}
 
-SÃ³ depois de receber sucesso nas duas ferramentas:
-- EventId do calendÃ¡rio
-- confirmaÃ§Ã£o do banco de dados
+Só depois de receber sucesso nas duas ferramentas:
+- EventId do calendário
+- confirmação do banco de dados
 
 Responda exatamente:
 
-"${tipoConversao} agendado! ðŸ˜Š ${dataHojeFormatada} Ã s [hora]. Consigo tirar alguma dÃºvida atÃ© lÃ¡?"
+"${tipoConversao} agendado! 😊 ${dataHojeFormatada} às [hora]. Consigo tirar alguma dúvida até lá?"
 
-Regras crÃ­ticas:
+Regras críticas:
 - PROIBIDO dizer "${tipoConversao} agendado" sem EventId da tool.
 - PROIBIDO inventar que o evento foi criado.
 - PROIBIDO usar data diferente de ${dataHoje} para hoje.
-- PROIBIDO confirmar o agendamento se confirmar_status_agendado retornar erro ou nÃ£o for chamada.
-- NUNCA peÃ§a cÃ³digo ou identificador de confirmaÃ§Ã£o.
+- PROIBIDO confirmar o agendamento se confirmar_status_agendado retornar erro ou não for chamada.
+- NUNCA peça código ou identificador de confirmação.
 
 ---
 
@@ -905,7 +910,7 @@ Regras crÃ­ticas:
 
 ## agendamentos MCP Client
 
-Tools disponÃ­veis:
+Tools disponíveis:
 
 - listar_eventos: consulta eventos usando Calendar, After e Before em ISO 8601 com -03:00.
 - criar_evento: cria evento usando Calendar, Start, End, Summary e Description.
@@ -916,31 +921,31 @@ Exemplo para HOJE ${dataHoje}:
 
 - After: "${isoAgora}"
 - Before: "${isoFimDia}"
-- Start Ã s 14h: "${dataHoje}T14:00:00-03:00"
-- End Ã s 15h: "${dataHoje}T15:00:00-03:00"`;
+- Start às 14h: "${dataHoje}T14:00:00-03:00"
+- End às 15h: "${dataHoje}T15:00:00-03:00"`;
 
     const OBJETIVO_VENDA_DIRETA = `## OBJETIVO: VENDA DIRETA
 
 ### PROTOCOLO DE VENDA DIRETA
 
-Seu objetivo Ã© conduzir o cliente para uma compra.
+Seu objetivo é conduzir o cliente para uma compra.
 
-VocÃª deve:
-1. Entender qual produto, serviÃ§o ou plano o cliente deseja.
-2. Confirmar se existe informaÃ§Ã£o suficiente no contexto/base de conhecimento.
-3. Explicar o benefÃ­cio principal de forma curta.
-4. Informar preÃ§o, condiÃ§Ã£o ou forma de pagamento apenas se isso estiver disponÃ­vel no contexto.
-5. Conduzir para o tipo de conversÃ£o escolhido: ${tipoConversao}.
+Você deve:
+1. Entender qual produto, serviço ou plano o cliente deseja.
+2. Confirmar se existe informação suficiente no contexto/base de conhecimento.
+3. Explicar o benefício principal de forma curta.
+4. Informar preço, condição ou forma de pagamento apenas se isso estiver disponível no contexto.
+5. Conduzir para o tipo de conversão escolhido: ${tipoConversao}.
 
 Regras:
-- NÃ£o invente preÃ§o.
-- NÃ£o ofereÃ§a desconto nÃ£o autorizado.
-- NÃ£o prometa prazo de entrega sem informaÃ§Ã£o.
-- NÃ£o diga que o pagamento foi aprovado sem confirmaÃ§Ã£o.
-- Se o cliente tiver dÃºvida, responda de forma curta e volte para o fechamento.
+- Não invente preço.
+- Não ofereça desconto não autorizado.
+- Não prometa prazo de entrega sem informação.
+- Não diga que o pagamento foi aprovado sem confirmação.
+- Se o cliente tiver dúvida, responda de forma curta e volte para o fechamento.
 
 Frase base:
-"Perfeito. Pelo que vocÃª me falou, essa opÃ§Ã£o faz sentido pra vocÃª. Posso seguir com ${tipoConversao}?"
+"Perfeito. Pelo que você me falou, essa opção faz sentido pra você. Posso seguir com ${tipoConversao}?"
 
 ---
 
@@ -954,55 +959,55 @@ Use ferramentas de venda/pagamento quando precisar:
 - validar pagamento
 
 Regras:
-- Confirme produto ou serviÃ§o antes.
-- NÃ£o invente link.
-- NÃ£o invente Pix.
-- NÃ£o confirme pagamento sem validaÃ§Ã£o.
-- NÃ£o prometa entrega sem contexto.`;
+- Confirme produto ou serviço antes.
+- Não invente link.
+- Não invente Pix.
+- Não confirme pagamento sem validação.
+- Não prometa entrega sem contexto.`;
 
-    const OBJETIVO_QUALIFICACAO_PROFUNDA = `## OBJETIVO: QUALIFICAÃ‡ÃƒO PROFUNDA
+    const OBJETIVO_QUALIFICACAO_PROFUNDA = `## OBJETIVO: QUALIFICAÇÃO PROFUNDA
 
-### PROTOCOLO DE QUALIFICAÃ‡ÃƒO PROFUNDA
+### PROTOCOLO DE QUALIFICAÇÃO PROFUNDA
 
-Seu objetivo Ã© coletar informaÃ§Ãµes importantes antes de encaminhar o cliente.
+Seu objetivo é coletar informações importantes antes de encaminhar o cliente.
 
-VocÃª deve:
+Você deve:
 1. Fazer uma pergunta por vez.
-2. Priorizar perguntas obrigatÃ³rias.
-3. NÃ£o transformar a conversa em interrogatÃ³rio.
+2. Priorizar perguntas obrigatórias.
+3. Não transformar a conversa em interrogatório.
 4. Validar respostas vagas.
 5. Ao final, resumir brevemente o perfil do cliente.
-6. Encaminhar para o prÃ³ximo passo definido em ${tipoConversao}.
+6. Encaminhar para o próximo passo definido em ${tipoConversao}.
 
 Regras:
-- Nunca pule perguntas obrigatÃ³rias.
-- Nunca faÃ§a vÃ¡rias perguntas longas na mesma mensagem.
-- Nunca encerre a qualificaÃ§Ã£o se ainda faltar dado obrigatÃ³rio.
-- Se o cliente nÃ£o quiser responder uma pergunta opcional, siga o fluxo.
-- Se o cliente nÃ£o quiser responder uma pergunta obrigatÃ³ria, explique de forma simples por que ela Ã© necessÃ¡ria.
+- Nunca pule perguntas obrigatórias.
+- Nunca faça várias perguntas longas na mesma mensagem.
+- Nunca encerre a qualificação se ainda faltar dado obrigatório.
+- Se o cliente não quiser responder uma pergunta opcional, siga o fluxo.
+- Se o cliente não quiser responder uma pergunta obrigatória, explique de forma simples por que ela é necessária.
 
 Frase base:
-"Pra eu te direcionar melhor, preciso entender sÃ³ mais um ponto: {{PERGUNTA_FALTANTE}}"`;
+"Pra eu te direcionar melhor, preciso entender só mais um ponto: {{PERGUNTA_FALTANTE}}"`;
 
-    const OBJETIVO_SUPORTE_TECNICO = `## OBJETIVO: SUPORTE TÃ‰CNICO
+    const OBJETIVO_SUPORTE_TECNICO = `## OBJETIVO: SUPORTE TÉCNICO
 
-### PROTOCOLO DE SUPORTE TÃ‰CNICO
+### PROTOCOLO DE SUPORTE TÉCNICO
 
-Seu objetivo Ã© entender o problema, tentar resolver com base nas informaÃ§Ãµes disponÃ­veis e escalar quando necessÃ¡rio.
+Seu objetivo é entender o problema, tentar resolver com base nas informações disponíveis e escalar quando necessário.
 
-VocÃª deve:
+Você deve:
 1. Entender o problema com perguntas curtas.
 2. Consultar a base de conhecimento/contexto antes de orientar.
-3. Passar instruÃ§Ãµes simples, uma etapa por vez.
+3. Passar instruções simples, uma etapa por vez.
 4. Confirmar se o cliente conseguiu resolver.
-5. Se nÃ£o resolver apÃ³s 2 tentativas, encaminhar para ${tipoConversao}.
+5. Se não resolver após 2 tentativas, encaminhar para ${tipoConversao}.
 
 Regras:
-- NÃ£o invente soluÃ§Ã£o tÃ©cnica.
-- NÃ£o peÃ§a dados sensÃ­veis desnecessÃ¡rios.
-- NÃ£o prometa prazo de resoluÃ§Ã£o sem informaÃ§Ã£o.
-- NÃ£o diga que um humano jÃ¡ assumiu se isso nÃ£o foi acionado.
-- Se for erro crÃ­tico, encaminhe para suporte humano.
+- Não invente solução técnica.
+- Não peça dados sensíveis desnecessários.
+- Não prometa prazo de resolução sem informação.
+- Não diga que um humano já assumiu se isso não foi acionado.
+- Se for erro crítico, encaminhe para suporte humano.
 
 Frase base:
 "Entendi. Vou te orientar pelo caminho mais seguro. Primeiro, me confirma uma coisa: {{PERGUNTA_DIAGNOSTICO}}"
@@ -1020,130 +1025,130 @@ Use ferramentas de suporte quando precisar:
 Regras:
 - Primeiro entenda o problema.
 - Depois consulte a base ou abra ticket.
-- Se nÃ£o houver soluÃ§Ã£o segura, encaminhe para suporte humano.
-- NÃ£o invente procedimento tÃ©cnico.`;
+- Se não houver solução segura, encaminhe para suporte humano.
+- Não invente procedimento técnico.`;
 
-    // --- BLOCOS DE CONVERSÃƒO ---
+    // --- BLOCOS DE CONVERSÃO ---
     const TIPO_VIDEOCHAMADA = `## TIPO: VIDEOCHAMADA
 
-A conversÃ£o deve ser uma videochamada.
+A conversão deve ser uma videochamada.
 
 Regras:
-- A IA nÃ£o realiza a videochamada.
+- A IA não realiza a videochamada.
 - A IA agenda ou encaminha para uma videochamada com ${aiSettings.papelHumano}.
-- Informe que o link serÃ¡ enviado ou disponibilizado conforme o fluxo configurado.
-- Se houver agenda, use a ferramenta de calendÃ¡rio.
-- Confirme data e horÃ¡rio antes de criar o evento.
+- Informe que o link será enviado ou disponibilizado conforme o fluxo configurado.
+- Se houver agenda, use a ferramenta de calendário.
+- Confirme data e horário antes de criar o evento.
 
 Frase base:
-"Posso te colocar em uma videochamada rÃ¡pida com ${aiSettings.papelHumano}? Assim ele te explica certinho e tira suas dÃºvidas."`;
+"Posso te colocar em uma videochamada rápida com ${aiSettings.papelHumano}? Assim ele te explica certinho e tira suas dúvidas."`;
 
     const TIPO_VISITA_PRESENCIAL = `## TIPO: VISITA PRESENCIAL
 
-A conversÃ£o deve ser uma visita presencial.
+A conversão deve ser uma visita presencial.
 
 Regras:
-- Confirme interesse, melhor dia e horÃ¡rio.
-- Se houver endereÃ§o no contexto, informe de forma curta.
-- Se nÃ£o houver endereÃ§o, diga que a equipe confirma os detalhes.
-- Nunca invente localizaÃ§Ã£o.
+- Confirme interesse, melhor dia e horário.
+- Se houver endereço no contexto, informe de forma curta.
+- Se não houver endereço, diga que a equipe confirma os detalhes.
+- Nunca invente localização.
 - Se houver agenda, consulte disponibilidade antes de confirmar.
 
 Frase base:
-"Podemos agendar uma visita presencial pra vocÃª conhecer melhor. Qual perÃ­odo fica melhor pra vocÃª: manhÃ£ ou tarde?"`;
+"Podemos agendar uma visita presencial pra você conhecer melhor. Qual período fica melhor pra você: manhã ou tarde?"`;
 
-    const TIPO_AGENDAMENTO_DE_SERVICO = `## TIPO: AGENDAMENTO DE SERVIÃ‡O
+    const TIPO_AGENDAMENTO_DE_SERVICO = `## TIPO: AGENDAMENTO DE SERVIÇO
 
-A conversÃ£o deve ser o agendamento de um ou mais serviÃ§os.
+A conversão deve ser o agendamento de um ou mais serviços.
 
-O agente deve apresentar os serviÃ§os disponÃ­veis que recebeu da RAG de produtos, entender qual ou quais serviÃ§os o cliente deseja realizar e conduzir para o agendamento usando as ferramentas de calendÃ¡rio.
+O agente deve apresentar os serviços disponíveis que recebeu da RAG de produtos, entender qual ou quais serviços o cliente deseja realizar e conduzir para o agendamento usando as ferramentas de calendário.
 
 Regras:
-- VocÃª jÃ¡ possui o telefone do cliente (${telefoneCliente}), NÃƒO pergunte novamente.
-- Este atendimento Ã© uma sandbox interna; mantenha o telefone exatamente como "${telefoneCliente}" e nÃ£o substitua por nÃºmero real, nÃºmero genÃ©rico ou telefone da empresa.
-- NUNCA peÃ§a nenhum tipo de identificador ou cÃ³digo de confirmaÃ§Ã£o.
-- Apresente os serviÃ§os disponÃ­veis de forma curta e natural.
-- Se houver lista de serviÃ§os no contexto/base de conhecimento, use somente essa lista.
-- NÃ£o invente serviÃ§os que nÃ£o estejam no contexto.
-- Pergunte qual ou quais serviÃ§os o cliente deseja agendar.
-- Se o cliente jÃ¡ demonstrar interesse em um serviÃ§o especÃ­fico, nÃ£o reapresente toda a lista.
-- Confirme o serviÃ§o escolhido antes de consultar horÃ¡rios.
-- Se o cliente escolher mais de um serviÃ§o, registre todos no resumo do atendimento.
-- Se houver duraÃ§Ã£o diferente por serviÃ§o no contexto, respeite essa duraÃ§Ã£o ao criar o evento.
-- Se nÃ£o houver duraÃ§Ã£o especÃ­fica, use a duraÃ§Ã£o padrÃ£o de 1 hora.
-- Consulte a agenda antes de sugerir horÃ¡rios.
-- OfereÃ§a no mÃ¡ximo 2 opÃ§Ãµes de horÃ¡rio por vez, oferecendo sempre as disponibilidades mais prÃ³ximas do horÃ¡rio atual.
-- Confirme data, horÃ¡rio e serviÃ§o antes de criar o evento.
-- SÃ³ confirme o agendamento apÃ³s sucesso da ferramenta.
-- NÃ£o diga que o serviÃ§o foi agendado antes da confirmaÃ§Ã£o da ferramenta.
-- NÃ£o prometa preÃ§o, prazo ou disponibilidade sem informaÃ§Ã£o no contexto.
+- Você já possui o telefone do cliente (${telefoneCliente}), NÃO pergunte novamente.
+- Este atendimento é uma sandbox interna; mantenha o telefone exatamente como "${telefoneCliente}" e não substitua por número real, número genérico ou telefone da empresa.
+- NUNCA peça nenhum tipo de identificador ou código de confirmação.
+- Apresente os serviços disponíveis de forma curta e natural.
+- Se houver lista de serviços no contexto/base de conhecimento, use somente essa lista.
+- Não invente serviços que não estejam no contexto.
+- Pergunte qual ou quais serviços o cliente deseja agendar.
+- Se o cliente já demonstrar interesse em um serviço específico, não reapresente toda a lista.
+- Confirme o serviço escolhido antes de consultar horários.
+- Se o cliente escolher mais de um serviço, registre todos no resumo do atendimento.
+- Se houver duração diferente por serviço no contexto, respeite essa duração ao criar o evento.
+- Se não houver duração específica, use a duração padrão de 1 hora.
+- Consulte a agenda antes de sugerir horários.
+- Ofereça no máximo 2 opções de horário por vez, oferecendo sempre as disponibilidades mais próximas do horário atual.
+- Confirme data, horário e serviço antes de criar o evento.
+- Só confirme o agendamento após sucesso da ferramenta.
+- Não diga que o serviço foi agendado antes da confirmação da ferramenta.
+- Não prometa preço, prazo ou disponibilidade sem informação no contexto.
 
 Fluxo sugerido:
-1. Apresente rapidamente os serviÃ§os disponÃ­veis.
-2. Pergunte qual serviÃ§o o cliente deseja agendar.
-3. Confirme o serviÃ§o escolhido.
+1. Apresente rapidamente os serviços disponíveis.
+2. Pergunte qual serviço o cliente deseja agendar.
+3. Confirme o serviço escolhido.
 4. Consulte disponibilidade na agenda.
-5. OfereÃ§a 2 horÃ¡rios livres.
-6. ApÃ³s o cliente escolher, crie o evento.
-7. Confirme o agendamento somente apÃ³s retorno da ferramenta.
+5. Ofereça 2 horários livres.
+6. Após o cliente escolher, crie o evento.
+7. Confirme o agendamento somente após retorno da ferramenta.
 
 Frase base:
-"Perfeito. Qual desses serviÃ§os vocÃª quer agendar? AÃ­ eu jÃ¡ vejo os melhores horÃ¡rios pra vocÃª."
+"Perfeito. Qual desses serviços você quer agendar? Aí eu já vejo os melhores horários pra você."
 
 ---
 
-# FERRAMENTAS DE AGENDAMENTO DE SERVIÃ‡O
+# FERRAMENTAS DE AGENDAMENTO DE SERVIÇO
 
-Use as mesmas ferramentas de calendÃ¡rio usadas para visita presencial, videochamada e agendamento.
+Use as mesmas ferramentas de calendário usadas para visita presencial, videochamada e agendamento.
 
-Ferramentas disponÃ­veis:
+Ferramentas disponíveis:
 - listar_eventos
 - criar_evento
 - reagendar
 - deletar_evento
 
 Regras:
-- Sempre chame listar_eventos antes de sugerir horÃ¡rios.
-- Nunca sugira horÃ¡rio passado.
-- Nunca confirme agendamento sem EventId ou confirmaÃ§Ã£o de sucesso da ferramenta.
-- Ao criar o evento, inclua no summary o tipo de conversÃ£o e o nome do cliente.
-- Ao criar o evento, inclua na description o telefone do cliente, o serviÃ§o escolhido e um resumo curto do atendimento.
-- Se o cliente escolher vÃ¡rios serviÃ§os, liste todos na description.
-- Se houver ferramenta de atualizaÃ§Ã£o de status, chame apÃ³s criar o evento.
-- SÃ³ responda como agendado depois que calendÃ¡rio e status forem confirmados.
+- Sempre chame listar_eventos antes de sugerir horários.
+- Nunca sugira horário passado.
+- Nunca confirme agendamento sem EventId ou confirmação de sucesso da ferramenta.
+- Ao criar o evento, inclua no summary o tipo de conversão e o nome do cliente.
+- Ao criar o evento, inclua na description o telefone do cliente, o serviço escolhido e um resumo curto do atendimento.
+- Se o cliente escolher vários serviços, liste todos na description.
+- Se houver ferramenta de atualização de status, chame após criar o evento.
+- Só responda como agendado depois que calendário e status forem confirmados.
 
 Exemplo de summary:
-"Agendamento de ServiÃ§o - ${nomeCliente}"
+"Agendamento de Serviço - ${nomeCliente}"
 
 Exemplo de description:
-"telefone: ${telefoneCliente} \\n serviÃ§o(s): [SERVICOS_ESCOLHIDOS] \\n resumo: [RESUMO_DO_ATENDIMENTO]"`;
+"telefone: ${telefoneCliente} \\n serviço(s): [SERVICOS_ESCOLHIDOS] \\n resumo: [RESUMO_DO_ATENDIMENTO]"`;
 
-    const TIPO_CHAMADA_TELEFONICA = `## TIPO: CHAMADA TELEFÃ”NICA
+    const TIPO_CHAMADA_TELEFONICA = `## TIPO: CHAMADA TELEFÔNICA
 
-A conversÃ£o deve ser uma chamada telefÃ´nica.
+A conversão deve ser uma chamada telefônica.
 
 Regras:
-- A IA nÃ£o faz a ligaÃ§Ã£o.
-- A IA agenda ou encaminha para que ${aiSettings.papelHumano} faÃ§a a chamada.
-- Confirme nÃºmero, dia e horÃ¡rio.
-- NÃ£o diga que alguÃ©m vai ligar imediatamente, a menos que isso esteja definido no contexto.
+- A IA não faz a ligação.
+- A IA agenda ou encaminha para que ${aiSettings.papelHumano} faça a chamada.
+- Confirme número, dia e horário.
+- Não diga que alguém vai ligar imediatamente, a menos que isso esteja definido no contexto.
 
 Frase base:
-"Posso deixar uma chamada alinhada com ${aiSettings.papelHumano}. Qual melhor horÃ¡rio pra vocÃª falar?"`;
+"Posso deixar uma chamada alinhada com ${aiSettings.papelHumano}. Qual melhor horário pra você falar?"`;
 
     const TIPO_LINK_PAGAMENTO_CHECKOUT = `## TIPO: LINK DE PAGAMENTO / CHECKOUT
 
-A conversÃ£o deve ser o envio de um link de pagamento ou checkout.
+A conversão deve ser o envio de um link de pagamento ou checkout.
 
 Regras:
-- SÃ³ envie link se existir no contexto ou ferramenta.
-- NÃ£o invente link.
-- Antes do link, confirme produto/plano/serviÃ§o escolhido.
+- Só envie link se existir no contexto ou ferramenta.
+- Não invente link.
+- Antes do link, confirme produto/plano/serviço escolhido.
 - Informe que o pagamento deve ser feito pelo link oficial.
-- Se necessÃ¡rio, peÃ§a comprovante apenas se essa for a regra do negÃ³cio.
+- Se necessário, peça comprovante apenas se essa for a regra do negócio.
 
 Frase base:
-"Perfeito. Posso te mandar o link de pagamento pra vocÃª finalizar com seguranÃ§a."
+"Perfeito. Posso te mandar o link de pagamento pra você finalizar com segurança."
 
 ---
 
@@ -1152,105 +1157,105 @@ Frase base:
 Use ferramentas de checkout quando precisar:
 - gerar link de pagamento
 - registrar pedido
-- validar transaÃ§Ã£o
+- validar transação
 
 Regras:
-- SÃ³ envie link se a ferramenta retornar.
-- NÃ£o invente link de checkout.
-- NÃ£o confirme pagamento sem validaÃ§Ã£o.`;
+- Só envie link se a ferramenta retornar.
+- Não invente link de checkout.
+- Não confirme pagamento sem validação.`;
 
     const TIPO_PIX = `## TIPO: PIX
 
-A conversÃ£o deve ser pagamento via Pix.
+A conversão deve ser pagamento via Pix.
 
 Regras:
-- SÃ³ informe chave Pix se ela estiver disponÃ­vel no contexto.
+- Só informe chave Pix se ela estiver disponível no contexto.
 - Nunca invente chave Pix.
-- Confirme valor, produto e condiÃ§Ã£o antes de enviar.
+- Confirme valor, produto e condição antes de enviar.
 - Oriente o cliente a enviar comprovante se essa for a regra.
-- NÃ£o confirme pagamento antes de validaÃ§Ã£o.
+- Não confirme pagamento antes de validação.
 
 Frase base:
-"Fechado. Posso te passar os dados do Pix e, depois do comprovante, seguimos com o prÃ³ximo passo."
+"Fechado. Posso te passar os dados do Pix e, depois do comprovante, seguimos com o próximo passo."
 
 ---
 
 # FERRAMENTAS DE PIX
 
 Use ferramentas de pagamento Pix quando precisar:
-- gerar cobranÃ§a Pix
+- gerar cobrança Pix
 - consultar status do pagamento
 - validar comprovante
 - registrar pedido
 
 Regras:
-- SÃ³ informe chave ou QR Code Pix se estiver no contexto ou retornar da ferramenta.
+- Só informe chave ou QR Code Pix se estiver no contexto ou retornar da ferramenta.
 - Nunca invente chave Pix.
-- NÃ£o confirme pagamento sem validaÃ§Ã£o.`;
+- Não confirme pagamento sem validação.`;
 
     const TIPO_FALAR_COM_VENDEDOR = `## TIPO: FALAR COM VENDEDOR
 
-A conversÃ£o deve ser encaminhar o cliente para um vendedor humano.
+A conversão deve ser encaminhar o cliente para um vendedor humano.
 
 Regras:
-- NÃ£o diga que o vendedor vai chamar imediatamente, a menos que o sistema faÃ§a isso.
-- Colete os dados obrigatÃ³rios antes de encaminhar.
-- Informe que o atendimento serÃ¡ direcionado para ${aiSettings.papelHumano}.
-- NÃ£o encerre de forma seca; deixe a transiÃ§Ã£o natural.
+- Não diga que o vendedor vai chamar imediatamente, a menos que o sistema faça isso.
+- Colete os dados obrigatórios antes de encaminhar.
+- Informe que o atendimento será direcionado para ${aiSettings.papelHumano}.
+- Não encerre de forma seca; deixe a transição natural.
 
 Frase base:
-"Vou te direcionar para ${aiSettings.papelHumano}, que consegue te passar os detalhes finais e te ajudar a escolher a melhor opÃ§Ã£o."`;
+"Vou te direcionar para ${aiSettings.papelHumano}, que consegue te passar os detalhes finais e te ajudar a escolher a melhor opção."`;
 
-    const TIPO_FORMULARIO_QUALIFICACAO = `## TIPO: FORMULÃRIO DE QUALIFICAÃ‡ÃƒO
+    const TIPO_FORMULARIO_QUALIFICACAO = `## TIPO: FORMULÁRIO DE QUALIFICAÇÃO
 
-A conversÃ£o deve ser preencher ou concluir uma qualificaÃ§Ã£o.
+A conversão deve ser preencher ou concluir uma qualificação.
 
 Regras:
-- FaÃ§a as perguntas uma por vez.
-- Priorize obrigatÃ³rias.
+- Faça as perguntas uma por vez.
+- Priorize obrigatórias.
 - Ao final, confirme que as respostas foram registradas.
-- Se existir link de formulÃ¡rio, envie apenas se estiver no contexto.
-- Se nÃ£o existir link, faÃ§a a qualificaÃ§Ã£o na conversa.
+- Se existir link de formulário, envie apenas se estiver no contexto.
+- Se não existir link, faça a qualificação na conversa.
 
 Frase base:
-"Vou te fazer algumas perguntinhas rÃ¡pidas pra entender melhor seu perfil e te direcionar do jeito certo."`;
+"Vou te fazer algumas perguntinhas rápidas pra entender melhor seu perfil e te direcionar do jeito certo."`;
 
-    const TIPO_TRANSMISSAO_PARA_CONSULTOR = `## TIPO: TRANSMISSÃƒO PARA CONSULTOR
+    const TIPO_TRANSMISSAO_PARA_CONSULTOR = `## TIPO: TRANSMISSÃO PARA CONSULTOR
 
-A conversÃ£o deve ser transmitir o atendimento para um consultor humano.
+A conversão deve ser transmitir o atendimento para um consultor humano.
 
 Regras:
-- FaÃ§a uma breve coleta de contexto antes.
-- NÃ£o diga que o consultor jÃ¡ estÃ¡ online se isso nÃ£o for garantido.
-- Informe que o consultor receberÃ¡ o resumo.
-- NÃ£o repita todas as perguntas se jÃ¡ foram respondidas.
+- Faça uma breve coleta de contexto antes.
+- Não diga que o consultor já está online se isso não for garantido.
+- Informe que o consultor receberá o resumo.
+- Não repita todas as perguntas se já foram respondidas.
 
 Frase base:
-"Perfeito. Vou passar seu caso para ${aiSettings.papelHumano} com o resumo do que vocÃª me contou."`;
+"Perfeito. Vou passar seu caso para ${aiSettings.papelHumano} com o resumo do que você me contou."`;
 
     const TIPO_AGENDAMENTO_DE_TRIAGEM = `## TIPO: AGENDAMENTO DE TRIAGEM
 
-A conversÃ£o deve ser uma triagem agendada.
+A conversão deve ser uma triagem agendada.
 
 Regras:
-- Explique que Ã© uma conversa inicial para entender o caso.
+- Explique que é uma conversa inicial para entender o caso.
 - Consulte agenda se houver ferramenta.
-- Confirme dados obrigatÃ³rios antes do agendamento.
-- NÃ£o prometa soluÃ§Ã£o final na triagem.
+- Confirme dados obrigatórios antes do agendamento.
+- Não prometa solução final na triagem.
 
 Frase base:
-"Podemos marcar uma triagem rÃ¡pida pra entender seu caso e ver o melhor caminho. Qual perÃ­odo fica melhor pra vocÃª?"`;
+"Podemos marcar uma triagem rápida pra entender seu caso e ver o melhor caminho. Qual período fica melhor pra você?"`;
 
     const TIPO_TICKET_DE_SUPORTE = `## TIPO: TICKET DE SUPORTE
 
-A conversÃ£o deve ser abertura de ticket de suporte.
+A conversão deve ser abertura de ticket de suporte.
 
 Regras:
-- Colete descriÃ§Ã£o do problema.
-- Colete dados obrigatÃ³rios configurados.
-- Informe que o chamado serÃ¡ registrado.
-- SÃ³ diga nÃºmero de ticket se a ferramenta retornar.
-- NÃ£o prometa prazo sem contexto.
+- Colete descrição do problema.
+- Colete dados obrigatórios configurados.
+- Informe que o chamado será registrado.
+- Só diga número de ticket se a ferramenta retornar.
+- Não prometa prazo sem contexto.
 
 Frase base:
 "Vou registrar isso como chamado de suporte pra equipe acompanhar certinho."
@@ -1261,40 +1266,40 @@ Frase base:
 
 Use ferramenta de ticket quando precisar:
 - abrir chamado
-- registrar descriÃ§Ã£o do problema
+- registrar descrição do problema
 - consultar status do chamado
 
 Regras:
-- SÃ³ diga nÃºmero de ticket se a ferramenta retornar.
-- NÃ£o prometa prazo sem contexto.
-- NÃ£o diga que o ticket foi aberto antes do retorno da ferramenta.`;
+- Só diga número de ticket se a ferramenta retornar.
+- Não prometa prazo sem contexto.
+- Não diga que o ticket foi aberto antes do retorno da ferramenta.`;
 
     const TIPO_BASE_DE_CONHECIMENTO = `## TIPO: BASE DE CONHECIMENTO
 
-A conversÃ£o deve ser orientar o cliente usando a base de conhecimento.
+A conversão deve ser orientar o cliente usando a base de conhecimento.
 
 Regras:
-- Responda somente com base no contexto/base disponÃ­vel.
-- Passe instruÃ§Ãµes curtas.
+- Responda somente com base no contexto/base disponível.
+- Passe instruções curtas.
 - Confirme se resolveu.
-- Se nÃ£o resolver apÃ³s 2 tentativas, escale para suporte humano.
-- NÃ£o invente procedimento.
+- Se não resolver após 2 tentativas, escale para suporte humano.
+- Não invente procedimento.
 
 Frase base:
 "Vou te passar o passo a passo mais seguro com base no que tenho aqui."`;
 
     const TIPO_FALAR_COM_SUPORTE_HUMANO = `## TIPO: FALAR COM SUPORTE HUMANO
 
-A conversÃ£o deve ser encaminhar para suporte humano.
+A conversão deve ser encaminhar para suporte humano.
 
 Regras:
-- Antes de encaminhar, colete o mÃ­nimo necessÃ¡rio sobre o problema.
-- Informe que o suporte humano receberÃ¡ o contexto.
-- NÃ£o diga que serÃ¡ imediato, salvo se estiver no contexto.
+- Antes de encaminhar, colete o mínimo necessário sobre o problema.
+- Informe que o suporte humano receberá o contexto.
+- Não diga que será imediato, salvo se estiver no contexto.
 - Se houver ferramenta de ticket, abra o chamado.
 
 Frase base:
-"Vou encaminhar vocÃª para o suporte humano com esse resumo, pra nÃ£o precisar explicar tudo de novo."`;
+"Vou encaminhar você para o suporte humano com esse resumo, pra não precisar explicar tudo de novo."`;
 
     const objetivosMapa: Record<string, string> = {
       'AGENDAMENTO': OBJETIVO_AGENDAMENTO,
@@ -1325,8 +1330,8 @@ Frase base:
 
     return `
 # IDENTIDADE
-VocÃª Ã© ${aiSettings.nomeAgente}, assistente da ${aiSettings.nomeEmpresa}.
-SaudaÃ§Ã£o: "${aiSettings.saudacao}"
+Você é ${aiSettings.nomeAgente}, assistente da ${aiSettings.nomeEmpresa}.
+Saudação: "${aiSettings.saudacao}"
 
 # REGRAS DE ATENDIMENTO
 ${objetivoPrompt}
@@ -1334,35 +1339,57 @@ ${objetivoPrompt}
 ${conversaoPrompt}
 
 # BASE DE CONHECIMENTO (RAG)
-${ragContext || 'Nenhum dado especÃ­fico encontrado.'}
+${ragContext || 'Nenhum dado específico encontrado.'}
 
-# RESTRIÃ‡Ã•ES
-${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
+# RESTRIÇÕES
+${aiSettings.restricoes.map(r => `❌ ${r}`).join('\n')}
 
 # ESTILO
 - Estilo WhatsApp (curto, emojis moderados).
-- MÃ¡ximo 2 parÃ¡grafos.
+- Máximo 2 parágrafos.
 - Uma pergunta por vez.
-- Nunca invente informaÃ§Ãµes.
+- Nunca invente informações.
     `.trim();
   };
 
   const fetchRagContext = async (query: string): Promise<N8nRagDecision> => {
     try {
-      // Busca simplificada direta no Supabase para sandbox
-      const { data } = await supabase
-        .from('z_atendimento_conhecimento')
-        .select('content')
-        .eq('metadata->>tenant_id', selectedClienteId)
-        .textSearch('content', query.split(' ').join(' | '))
-        .limit(14);
+      const response = await fetch('/api/rag-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          tenantId: selectedClienteId,
+          matchCount: 8
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao consultar RAG');
+      }
+
+      const matches = Array.isArray(result.matches) ? result.matches : [];
+      const ragText = matches.map((item: any) => item.content).join('\n---\n');
+      console.info('[RAG Sandbox]', {
+        query,
+        tenant: selectedClienteId,
+        function: 'match_conhecimento',
+        matchedRecords: matches.length,
+        topMatches: matches.map((item: any) => ({
+          similarity: item.similarity,
+          tipo: item.metadata?.tipo,
+          preview: String(item.content || '').slice(0, 120)
+        }))
+      });
 
       return buildLocalRagDecision({
         userMessage: query,
-        ragContext: data?.map(d => d.content).join('\n---\n') || '',
+        ragContext: ragText,
         perguntasQualificacao: aiSettings.perguntasQualificacao
       });
-    } catch {
+    } catch (error) {
+      console.error('[RAG Sandbox] Erro ao consultar RAG:', error);
       return buildLocalRagDecision({
         userMessage: query,
         ragContext: '',
@@ -1401,12 +1428,12 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
 
       const data = await response.json();
       if (!response.ok) {
-        console.error('âŒ Erro na Sandbox:', data.error);
+        console.error('❌ Erro na Sandbox:', data.error);
         throw new Error(data.error || "Erro na sandbox interna");
       }
       aiResponseText = data.output || "";
 
-      // LÃ³gica de FragmentaÃ§Ã£o (Picote)
+      // Lógica de Fragmentação (Picote)
       const blocks = aiResponseText.split(/(?<=[.?!])\s+/).map((b: string) => b.trim()).filter((b: string) => b.length > 2);
       const finalBlocks = blocks.length > 0 ? blocks : [aiResponseText];
 
@@ -1425,13 +1452,13 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
   };
 
   const clearTrainingChat = () => {
-    if (!window.confirm("Limpar histÃ³rico da sandbox?")) return;
+    if (!window.confirm("Limpar histórico da sandbox?")) return;
     setTrainingMessages([]);
     addToast("Sandbox limpa!", "success");
   };
 
   const saveProduct = async () => {
-    if (!formState.nome) return alert("Nome obrigatÃ³rio");
+    if (!formState.nome) return alert("Nome obrigatório");
     setIsUploading(true);
     let finalImageUrl = formState.imagemUrl || null;
     if (imageFile) {
@@ -1462,12 +1489,12 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
     }
 
     if (savedProduct) {
-      // SINCRONIZAÃ‡ÃƒO RAG
+      // SINCRONIZAÇÃO RAG
       await supabase.from('z_atendimento_conhecimento')
         .delete().filter('metadata->>id_ref', 'eq', savedProduct.id.toString());
 
-      const label = savedProduct.tipo === 'servico' ? 'ServiÃ§o' : 'Produto';
-      const ragContent = `${label}: ${savedProduct.nome} | DescriÃ§Ã£o: ${savedProduct.descricao} | PreÃ§o: R$${savedProduct.preco}${savedProduct.tipo === 'servico' ? ' | Disponibilidade: Sob Consulta (ServiÃ§o)' : ` | Estoque: ${savedProduct.estoque}`}`;
+      const label = savedProduct.tipo === 'servico' ? 'Serviço' : 'Produto';
+      const ragContent = `${label}: ${savedProduct.nome} | Descrição: ${savedProduct.descricao} | Preço: R$${savedProduct.preco}${savedProduct.tipo === 'servico' ? ' | Disponibilidade: Sob Consulta (Serviço)' : ` | Estoque: ${savedProduct.estoque}`}`;
       const ragMetadata = {
         id_ref: savedProduct.id.toString(),
         tenant_id: selectedClienteId,
@@ -1498,15 +1525,15 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
   };
 
   const deleteProduct = async (id: string) => {
-    if (!window.confirm("Deseja realmente excluir este produto? Isso tambÃ©m removerÃ¡ o conhecimento da IA.")) return;
+    if (!window.confirm("Deseja realmente excluir este produto? Isso também removerá o conhecimento da IA.")) return;
 
     setIsLoading(true);
     try {
-      // 1. Deletar do RAG para evitar lixo semÃ¢ntico
+      // 1. Deletar do RAG para evitar lixo semântico
       await supabase.from('z_atendimento_conhecimento')
         .delete().filter('metadata->>id_ref', 'eq', id.toString());
 
-      // 2. Notificar Webhook RAG da remoÃ§Ã£o
+      // 2. Notificar Webhook RAG da remoção
       fetch(`${WEBHOOK_BASE}/webhook/rag-disponibilidades`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1515,12 +1542,12 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
         }])
       }).catch(err => console.error('Erro Webhook RAG Delete:', err));
 
-      // 3. Deletar o produto fÃ­sico
+      // 3. Deletar o produto físico
       const { error } = await supabase.from('z_bd_produtos').delete().eq('id', id);
 
       if (error) throw error;
 
-      addToast("Produto excluÃ­do com sucesso!", "success");
+      addToast("Produto excluído com sucesso!", "success");
       fetchProdutos();
     } catch (err) {
       console.error(err);
@@ -1531,7 +1558,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
   };
 
   const saveClient = async () => {
-    if (!clientForm.nome) return alert("Nome obrigatÃ³rio");
+    if (!clientForm.nome) return alert("Nome obrigatório");
     const instanceName = `${userEmail}-${clientForm.nome.replace(/\s+/g, '_').toLowerCase()}`;
     const newId = 'cust_' + Date.now().toString(36);
     const { error } = await supabase.from('z_bd_atendimento_clientes').insert([{ ...clientForm, id: newId, instance_name: instanceName, user_id: userEmail }]);
@@ -1576,7 +1603,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
       const rawProducts = Array.isArray(data) ? data : (data.produtos || []);
 
       if (rawProducts.length === 0) {
-        alert("Nenhum produto encontrado neste link. O site pode estar bloqueando o acesso ou o formato Ã© incompatÃ­vel.");
+        alert("Nenhum produto encontrado neste link. O site pode estar bloqueando o acesso ou o formato é incompatível.");
         return;
       }
 
@@ -1591,7 +1618,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
       setScrapedProducts(mapped);
     } catch (err: any) {
       console.error('Erro no Scrape:', err);
-      alert(`Erro na importaÃ§Ã£o: ${err.message}`);
+      alert(`Erro na importação: ${err.message}`);
     } finally {
       setIsScraping(false);
     }
@@ -1616,7 +1643,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
     if (!pError && newProducts) {
       // Sincronizar cada produto novo com a RAG
       for (const prod of newProducts) {
-        const ragContent = `Produto: ${prod.nome} | DescriÃ§Ã£o: ${prod.descricao} | PreÃ§o: R$${prod.preco} | Estoque: ${prod.estoque}`;
+        const ragContent = `Produto: ${prod.nome} | Descrição: ${prod.descricao} | Preço: R$${prod.preco} | Estoque: ${prod.estoque}`;
         const ragMetadata = {
           id_ref: prod.id.toString(),
           tenant_id: selectedClienteId,
@@ -1652,7 +1679,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <div>
             <h1>Monitor de Chat</h1>
-            <p className="subtitle">GestÃ£o de conversas em tempo real</p>
+            <p className="subtitle">Gestão de conversas em tempo real</p>
           </div>
 
           <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
@@ -1660,7 +1687,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
               <button className={`toggle-btn ${conversasSubView === 'chat' ? 'active' : ''}`} onClick={() => setConversasSubView('chat')}><MessageSquare size={16} /> Chat</button>
               <button className={`toggle-btn ${conversasSubView === 'dashboard' ? 'active' : ''}`} onClick={() => setConversasSubView('dashboard')}><LayoutDashboard size={16} /> Dashboard</button>
             </div>
-            <button className="btn-outline" onClick={() => setView('client-hub')}>â† Voltar ao Hub</button>
+            <button className="btn-outline" onClick={() => setView('client-hub')}>← Voltar ao Hub</button>
           </div>
         </div>
 
@@ -1694,7 +1721,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                       <div><h3>{contacts.find(c => c.phone === selectedPhone)?.nomewpp}</h3><p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{selectedPhone}</p></div>
                     </div>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                      <span className={`badge-ia ${clientStatus?.atendimento_ia}`}>{clientStatus?.atendimento_ia === 'atendendo' ? 'ðŸ¤– IA Ativa' : 'ðŸ‘¤ IA Pausada'}</span>
+                      <span className={`badge-ia ${clientStatus?.atendimento_ia}`}>{clientStatus?.atendimento_ia === 'atendendo' ? '🤖 IA Ativa' : '👤 IA Pausada'}</span>
                       <button className="btn-outline" onClick={toggleIAPause}>Alternar</button>
                     </div>
                   </div>
@@ -1706,10 +1733,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                             {m.user_message}
                             <span className="message-time">{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             {!taughtMessageIds.includes(m.id) && (
-                              <button className="teach-btn" onClick={() => {
-                                setTeachingData({ objection: m.user_message!, answer: '', messageId: m.id });
-                                setShowTeachingModal(true);
-                              }}><Zap size={14} /></button>
+                              <button className="teach-btn" onClick={() => openTeachingModal(m.user_message!, m.id)}><Zap size={14} /></button>
                             )}
                           </div>
                         )}
@@ -1733,25 +1757,6 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
           </div>
         )}
 
-        {showTeachingModal && (
-          <div className="modal-overlay">
-            <div className="glass-panel modal-content" style={{ maxWidth: '500px' }}>
-              <div className="modal-header"><h2>ðŸ§  Ensinar IA</h2><button onClick={() => setShowTeachingModal(false)}><X /></button></div>
-              <div className="form-group">
-                <label>ObjeÃ§Ã£o do Cliente</label>
-                <textarea rows={3} value={teachingData.objection} onChange={e => setTeachingData({...teachingData, objection: e.target.value})} />
-              </div>
-              <div className="form-group">
-                <label>Resposta Ideal</label>
-                <textarea rows={4} value={teachingData.answer} onChange={e => setTeachingData({...teachingData, answer: e.target.value})} placeholder="Como a IA deve responder?" />
-              </div>
-              <div className="modal-footer">
-                <button className="btn-outline" onClick={() => setShowTeachingModal(false)}>Cancelar</button>
-                <button className="btn-primary" onClick={saveTeaching} disabled={isLoading}>{isLoading ? 'Salvando...' : 'Salvar no RAG'}</button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -1763,21 +1768,21 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
       <div className="main-content" style={{ animation: 'fadeIn 0.5s ease' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <div>
-            <h1>ConfiguraÃ§Ãµes do Cliente</h1>
-            <p className="subtitle">Gerencie conexÃµes e parÃ¢metros da IA</p>
+            <h1>Configurações do Cliente</h1>
+            <p className="subtitle">Gerencie conexões e parâmetros da IA</p>
           </div>
-          <button className="btn-outline" onClick={() => setView('client-hub')}>â† Voltar ao Hub</button>
+          <button className="btn-outline" onClick={() => setView('client-hub')}>← Voltar ao Hub</button>
         </div>
 
         <div style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
-          {/* Coluna da Esquerda: Status da InstÃ¢ncia */}
+          {/* Coluna da Esquerda: Status da Instância */}
           <div style={{ width: '380px', flexShrink: 0 }}>
             <div className="glass-panel metric-card" style={{
               border: `1px solid ${status === 'conectado' ? '#10b981' : '#f59e0b'}`,
               height: 'auto',
               marginBottom: '1rem'
             }}>
-              <div className="metric-label">Status da InstÃ¢ncia</div>
+              <div className="metric-label">Status da Instância</div>
               <div className="metric-value" style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1801,7 +1806,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                   {status === 'conectado' ? 'Conectado' : 'Desconectado'}
                 </span>
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>InstÃ¢ncia: <strong>{selectedCliente?.instance_name}</strong></p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>Instância: <strong>{selectedCliente?.instance_name}</strong></p>
 
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                 {status === 'conectado' ? (
@@ -1838,7 +1843,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                   </>
                 ) : (
                   <>
-                    <button className="btn-outline" onClick={() => checkInstanceStatus(selectedClienteId, selectedCliente?.instance_name!)} style={{ flex: 1 }}>ðŸ”„ Atualizar</button>
+                    <button className="btn-outline" onClick={() => checkInstanceStatus(selectedClienteId, selectedCliente?.instance_name!)} style={{ flex: 1 }}>🔄 Atualizar</button>
                     <button
                       className="btn-primary"
                       onClick={() => {
@@ -1877,14 +1882,14 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
               )}
             </div>
 
-            {/* NotificaÃ§Ã£o de ConversÃµes */}
+            {/* Notificação de Conversões */}
             <div className="glass-panel metric-card" style={{ marginTop: '1.5rem', height: 'auto' }}>
-              <div className="metric-label" style={{ marginBottom: '1rem' }}>Avisar conversÃµes em:</div>
+              <div className="metric-label" style={{ marginBottom: '1rem' }}>Avisar conversões em:</div>
               <input
                 type="text"
                 value={aiSettings.notificarEm}
                 onChange={e => setAiSettings({...aiSettings, notificarEm: e.target.value})}
-                placeholder="NÃºmero ou ID de Grupo"
+                placeholder="Número ou ID de Grupo"
               />
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                 <button className="btn-outline" onClick={() => showGroups ? setShowGroups(false) : fetchGroups()} style={{ flex: 1 }} disabled={isFetchingGroups}>
@@ -1909,7 +1914,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
           {/* Ajuste de Atendimento */}
           <div className="glass-panel" style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', minHeight: '600px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-              <h2 style={{ margin: 0 }}>{showTrainingChat ? 'ðŸ’¬ Chat de Treinamento' : 'ðŸ§  ConfiguraÃ§Ãµes da IA'}</h2>
+              <h2 style={{ margin: 0 }}>{showTrainingChat ? '💬 Chat de Treinamento' : '🧠 Configurações da IA'}</h2>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <button
                   className={showTrainingChat ? "btn-outline" : "btn-primary"}
@@ -1960,16 +1965,19 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                       {trainingMessages.length === 0 && (
                         <div style={{ textAlign: 'center', padding: '4rem 2rem', opacity: 0.5 }}>
                           <Zap size={48} style={{ margin: '0 auto 1rem', display: 'block' }} />
-                          <p>Esta Ã© uma simulaÃ§Ã£o interna segura.</p>
+                          <p>Esta é uma simulação interna segura.</p>
                           <p style={{ fontSize: '0.8rem' }}>A IA pode acessar ferramentas reais agora.</p>
                         </div>
                       )}
                       {trainingMessages.map(m => (
                         <Fragment key={m.id}>
                           {m.user_message && (
-                            <div className="message-bubble message-user" style={{ alignSelf: 'flex-start', maxWidth: '80%' }}>
+                            <div className={`message-bubble message-user ${taughtMessageIds.includes(m.id) ? 'ensinado-rag' : ''}`} style={{ alignSelf: 'flex-start', maxWidth: '80%', position: 'relative' }}>
                               {m.user_message}
                               <span className="message-time">{new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              {!taughtMessageIds.includes(m.id) && (
+                                <button className="teach-btn" onClick={() => openTeachingModal(m.user_message!, m.id)}><Zap size={14} /></button>
+                              )}
                             </div>
                           )}
                           {m.bot_message && (
@@ -2033,7 +2041,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                   <input type="text" value={aiSettings.nomeEmpresa} onChange={e => setAiSettings({...aiSettings, nomeEmpresa: e.target.value})} />
                 </div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label>SaudaÃ§Ã£o</label>
+                  <label>Saudação</label>
                   <textarea rows={2} value={aiSettings.saudacao} onChange={e => setAiSettings({...aiSettings, saudacao: e.target.value})} />
                 </div>
 
@@ -2042,12 +2050,12 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                   <select value={aiSettings.objetivo} onChange={e => setAiSettings({...aiSettings, objetivo: e.target.value})}>
                     <option value="Agendamento">Agendamento</option>
                     <option value="Venda Direta">Venda Direta</option>
-                    <option value="Suporte TÃ©cnico">Suporte TÃ©cnico</option>
-                    <option value="QualificaÃ§Ã£o Profunda">QualificaÃ§Ã£o Profunda</option>
+                    <option value="Suporte Técnico">Suporte Técnico</option>
+                    <option value="Qualificação Profunda">Qualificação Profunda</option>
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Tipo de ConversÃ£o</label>
+                  <label>Tipo de Conversão</label>
                   <select
                     value={aiSettings.tipoConversao}
                     onChange={e => setAiSettings({...aiSettings, tipoConversao: e.target.value})}
@@ -2073,9 +2081,9 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                     <ol style={{ paddingLeft: '1.2rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem', color: '#e2e8f0' }}>
                       <li>Compartilhe sua agenda Google com: <strong>ismael.matias7622@gmail.com</strong></li>
                       <li>Informe ao admin que compartilhou a agenda.</li>
-                      <li>ApÃ³s a confirmaÃ§Ã£o do admin, siga para o passo 4.</li>
+                      <li>Após a confirmação do admin, siga para o passo 4.</li>
                       <li>
-                        Clique em "3 pontinhos" (<MoreVertical size={14} style={{ display: 'inline', verticalAlign: 'middle' }} />) ao lado do nome da agenda, em seguida clique em <strong>"ConfiguraÃ§Ãµes e compart."</strong>
+                        Clique em "3 pontinhos" (<MoreVertical size={14} style={{ display: 'inline', verticalAlign: 'middle' }} />) ao lado do nome da agenda, em seguida clique em <strong>"Configurações e compart."</strong>
                         <div style={{ marginTop: '0.25rem' }}>
                           <button type="button" onClick={() => setPreviewImage('/anexo3.png')} style={{ background: 'none', border: 'none', color: '#60a5fa', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: '0.85rem' }}>
                             veja a imagem do dado esperado clicando aqui
@@ -2107,11 +2115,11 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                 )}
 
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label>O que a IA NÃƒO deve fazer (RestriÃ§Ãµes)</label>
+                  <label>O que a IA NÃO deve fazer (Restrições)</label>
                   <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                     <input
                       type="text"
-                      placeholder="Ex: NÃ£o dar descontos sem autorizaÃ§Ã£o"
+                      placeholder="Ex: Não dar descontos sem autorização"
                       value={novaRestricao}
                       onChange={e => setNovaRestricao(e.target.value)}
                       onKeyPress={e => {
@@ -2154,9 +2162,9 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                   </div>
                 </div>
 
-                {/* QualificaÃ§Ã£o de Leads */}
+                {/* Qualificação de Leads */}
                 <div className="form-group" style={{ gridColumn: 'span 2', marginTop: '1.5rem' }}>
-                  <label>QualificaÃ§Ã£o de Leads (Perguntas que a IA deve fazer)</label>
+                  <label>Qualificação de Leads (Perguntas que a IA deve fazer)</label>
                   <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                     <input
                       type="text"
@@ -2204,7 +2212,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                               setAiSettings({...aiSettings, perguntasQualificacao: newPerguntas});
                             }}
                           >
-                            {per.required ? 'ObrigatÃ³ria' : 'Opcional'}
+                            {per.required ? 'Obrigatória' : 'Opcional'}
                           </button>
                           <button
                             onClick={() => setAiSettings(p => ({...p, perguntasQualificacao: p.perguntasQualificacao.filter((_, i) => i !== idx)}))}
@@ -2269,7 +2277,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
 
   const Sidebar = () => (
     <aside className="sidebar">
-      <div onClick={() => setView('home')}><h2>â† Home</h2></div>
+      <div onClick={() => setView('home')}><h2>← Home</h2></div>
       {clientes.map(cli => (
         <div key={cli.id} className={`menu-item ${selectedClienteId === cli.id ? 'active' : ''}`} onClick={() => setSelectedClienteId(cli.id)}>{cli.nome}</div>
       ))}
@@ -2284,8 +2292,8 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
     <div className="main-content" style={{ maxWidth: '1400px', margin: '0 auto', width: '100%', animation: 'fadeIn 0.8s ease-out' }}>
       <header className="header-actions" style={{ marginBottom: '3rem' }}>
         <div>
-          <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.04em' }}>OlÃ¡, {userEmail.split('@')[0]}!</h1>
-          <p className="subtitle" style={{ fontSize: '1.1rem', opacity: 0.8 }}>Centro de comando Multi-Tenant â€¢ Gerencie seus clientes e IAs</p>
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.04em' }}>Olá, {userEmail.split('@')[0]}!</h1>
+          <p className="subtitle" style={{ fontSize: '1.1rem', opacity: 0.8 }}>Centro de comando Multi-Tenant • Gerencie seus clientes e IAs</p>
         </div>
         <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
           <button className="btn-outline" style={{ padding: '0.8rem 1.5rem' }} onClick={() => supabase.auth.signOut()}>Sair</button>
@@ -2327,7 +2335,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                   <div>
                     <h3 style={{ margin: 0, fontSize: '1.4rem' }}>{cli.nome}</h3>
                     <div style={{ fontSize: '0.85rem', color: status === 'conectado' ? '#10b981' : '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '4px' }}>
-                      {status === 'conectado' ? 'InstÃ¢ncia Ativa' : 'Desconectado'}
+                      {status === 'conectado' ? 'Instância Ativa' : 'Desconectado'}
                     </div>
                   </div>
                 </div>
@@ -2355,7 +2363,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
             </div>
             <div className="form-group">
               <label>Nome da Empresa / Cliente</label>
-              <input type="text" placeholder="Ex: ImobiliÃ¡ria Silva" value={clientForm.nome} onChange={e => setClientForm({...clientForm, nome: e.target.value})} />
+              <input type="text" placeholder="Ex: Imobiliária Silva" value={clientForm.nome} onChange={e => setClientForm({...clientForm, nome: e.target.value})} />
             </div>
             <div className="form-group">
               <label>Email de Contato</label>
@@ -2367,7 +2375,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
             </div>
             <div className="modal-footer" style={{ marginTop: '2.5rem', gap: '1rem' }}>
               <button className="btn-outline" style={{ flex: 1 }} onClick={() => setIsClientModalOpen(false)}>Cancelar</button>
-              <button className="btn-primary" style={{ flex: 1.5 }} onClick={saveClient} disabled={isLoading}>{isLoading ? 'Criando...' : 'Criar InstÃ¢ncia'}</button>
+              <button className="btn-primary" style={{ flex: 1.5 }} onClick={saveClient} disabled={isLoading}>{isLoading ? 'Criando...' : 'Criar Instância'}</button>
             </div>
           </div>
         </div>
@@ -2383,7 +2391,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
         </button>
         <div style={{ textAlign: 'right' }}>
           <h1 style={{ margin: 0, fontSize: '2rem' }}>{selectedCliente?.nome}</h1>
-          <p className="subtitle" style={{ margin: 0 }}>Hub de GestÃ£o</p>
+          <p className="subtitle" style={{ margin: 0 }}>Hub de Gestão</p>
         </div>
       </div>
 
@@ -2411,7 +2419,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
             </div>
             <div style={{ fontSize: '0.9rem', opacity: 0.8, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <p><strong>ID:</strong> {selectedClienteId}</p>
-              <p><strong>InstÃ¢ncia:</strong> {selectedCliente?.instance_name}</p>
+              <p><strong>Instância:</strong> {selectedCliente?.instance_name}</p>
               <p><strong>Email:</strong> {selectedCliente?.email}</p>
             </div>
           </div>
@@ -2423,8 +2431,8 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
               <Settings size={32} />
             </div>
             <div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '4px' }}>ConfiguraÃ§Ãµes da IA</div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 400, opacity: 0.6 }}>Ajuste a personalidade, objetivos e conexÃ£o WhatsApp</div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '4px' }}>Configurações da IA</div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 400, opacity: 0.6 }}>Ajuste a personalidade, objetivos e conexão WhatsApp</div>
             </div>
             <ArrowRight size={24} style={{ marginLeft: 'auto', opacity: 0.3 }} />
           </button>
@@ -2479,10 +2487,10 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
             <tr>
               <th>Produto</th>
               <th>Tipo</th>
-              <th>DescriÃ§Ã£o</th>
-              <th>PreÃ§o (R$)</th>
+              <th>Descrição</th>
+              <th>Preço (R$)</th>
               <th>Estoque</th>
-              <th style={{ textAlign: 'center' }}>AÃ§Ãµes</th>
+              <th style={{ textAlign: 'center' }}>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -2522,12 +2530,12 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                       border: `1px solid ${p.tipo === 'servico' ? 'rgba(99,102,241,0.2)' : 'rgba(16,185,129,0.2)'}`
                     }}>
                       {p.tipo === 'servico' ? <Settings size={12} /> : <Package size={12} />}
-                      {p.tipo === 'servico' ? 'ServiÃ§o' : 'Produto'}
+                      {p.tipo === 'servico' ? 'Serviço' : 'Produto'}
                     </div>
                   </td>
                   <td style={{ maxWidth: '300px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                     <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {p.descricao || 'â€”'}
+                      {p.descricao || '—'}
                     </div>
                   </td>
                   <td>
@@ -2537,7 +2545,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                   </td>
                   <td>
                     {p.tipo === 'servico' ? (
-                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', opacity: 0.5 }}>â€”</span>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', opacity: 0.5 }}>—</span>
                     ) : (
                       <div className={`stock-badge ${p.estoque > 5 ? 'stock-high' : p.estoque > 0 ? 'stock-low' : 'stock-out'}`}>
                         {p.estoque} Unid.
@@ -2582,7 +2590,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                 <input type="text" value={formState.nome} onChange={e => setFormState({...formState, nome: e.target.value})} />
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>DescriÃ§Ã£o (serÃ¡ usada na RAG)</label>
+                <label>Descrição (será usada na RAG)</label>
                 <textarea rows={3} value={formState.descricao} onChange={e => setFormState({...formState, descricao: e.target.value})} />
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -2593,19 +2601,19 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
                     style={{ flex: 1, padding: '0.6rem' }}
                     onClick={() => setFormState({...formState, tipo: 'produto'})}
                   >
-                    ðŸ“¦ Produto (Tem Estoque)
+                    📦 Produto (Tem Estoque)
                   </button>
                   <button
                     className={formState.tipo === 'servico' ? 'btn-primary' : 'btn-outline'}
                     style={{ flex: 1, padding: '0.6rem' }}
                     onClick={() => setFormState({...formState, tipo: 'servico', estoque: 0})}
                   >
-                    ðŸ› ï¸ ServiÃ§o (Sem Estoque)
+                    🛠️ Serviço (Sem Estoque)
                   </button>
                 </div>
               </div>
               <div className="form-group">
-                <label>PreÃ§o (R$)</label>
+                <label>Preço (R$)</label>
                 <input type="number" value={formState.preco} onChange={e => setFormState({...formState, preco: parseFloat(e.target.value)})} />
               </div>
               <div className="form-group">
@@ -2635,7 +2643,7 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
         <div className="modal-overlay" style={{ backdropFilter: 'blur(10px)' }}>
           <div className="glass-panel modal-content" style={{ maxWidth: '900px', width: '90%' }}>
             <div className="modal-header">
-              <h2>ðŸŒ Importar do Site</h2>
+              <h2>🌐 Importar do Site</h2>
               <button onClick={() => setIsScrapeModalOpen(false)}><X size={20} /></button>
             </div>
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
@@ -2675,7 +2683,27 @@ ${aiSettings.restricoes.map(r => `âŒ ${r}`).join('\n')}
   return (
     <div className="layout-wrapper">
       <Sidebar />
-      {view === 'conversas' ? renderConversasView() : view === 'config' ? renderConfigView() : <div>View nÃ£o encontrada</div>}
+      {view === 'conversas' ? renderConversasView() : view === 'config' ? renderConfigView() : <div>View não encontrada</div>}
+
+      {showTeachingModal && (
+        <div className="modal-overlay">
+          <div className="glass-panel modal-content" style={{ maxWidth: '500px' }}>
+            <div className="modal-header"><h2>🧠 Ensinar IA</h2><button onClick={() => setShowTeachingModal(false)}><X /></button></div>
+            <div className="form-group">
+              <label>Objeção do Cliente</label>
+              <textarea rows={3} value={teachingData.objection} onChange={e => setTeachingData({...teachingData, objection: e.target.value})} />
+            </div>
+            <div className="form-group">
+              <label>Resposta Ideal</label>
+              <textarea rows={4} value={teachingData.answer} onChange={e => setTeachingData({...teachingData, answer: e.target.value})} placeholder="Como a IA deve responder?" />
+            </div>
+            <div className="modal-footer">
+              <button className="btn-outline" onClick={() => setShowTeachingModal(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={saveTeaching} disabled={isLoading}>{isLoading ? 'Salvando...' : 'Salvar no RAG'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Container */}
       <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', zIndex: 9999 }}>

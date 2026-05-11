@@ -1,4 +1,4 @@
-﻿const MCP_URL = 'https://webhook.storyallday.com/mcp/agendamento';
+const MCP_URL = 'https://webhook.storyallday.com/mcp/agendamento';
 
 const tools = [
   {
@@ -224,6 +224,11 @@ export default async function handler(req, res) {
   }
 
   try {
+    const ragPreview = systemPrompt.match(/Mensagem ou instrução anterior:\s*"([\s\S]*?)"\s*Ação indicada:/)?.[1]?.trim();
+    console.log('\n--- 🤖 INICIANDO CHAMADA SANDBOX ---');
+    console.log('Pergunta:', userMessage);
+    console.log('📚 RAG no prompt:', ragPreview ? ragPreview.slice(0, 220).replace(/\s+/g, ' ') : 'não identificado');
+
     const defaults = extractDefaults(systemPrompt);
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -261,7 +266,7 @@ export default async function handler(req, res) {
           toolContent = toolResultCache.get(cacheKey);
           messages.push({
             role: 'system',
-            content: 'O evento solicitado jÃ¡ foi criado nesta mesma rodada. NÃ£o chame criar_evento novamente para o mesmo horÃ¡rio; continue o fluxo normal e responda ao cliente.'
+            content: 'O evento solicitado já foi criado nesta mesma rodada. Não chame criar_evento novamente para o mesmo horário; continue o fluxo normal e responda ao cliente.'
           });
         } else {
           toolContent = await callMCPTool(toolName, args);
