@@ -1,0 +1,43 @@
+{
+  "updatedAt": "2026-05-12T11:27:14.498Z",
+  "createdAt": "2026-05-12T11:27:14.498Z",
+  "id": "7eTGLeTDeTODUAcz",
+  "name": "Untitled-1778585223792",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "eb1f6e69-ae78-4f6b-918d-2be7698a6486",
+  "activeVersionId": null,
+  "versionCounter": 1,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-12T11:27:14.498Z",
+      "createdAt": "2026-05-12T11:27:14.498Z",
+      "role": "workflow:owner",
+      "workflowId": "7eTGLeTDeTODUAcz",
+      "projectId": "Y17AYEZsPMsV3YIU",
+      "project": {
+        "updatedAt": "2025-10-22T12:59:48.539Z",
+        "createdAt": "2025-10-22T10:17:11.241Z",
+        "id": "Y17AYEZsPMsV3YIU",
+        "name": "Ismael Matias <interfacepsc@planetsmartcity.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "e288db6f-a592-4a0c-969f-c56da1c4e285"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

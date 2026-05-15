@@ -223,7 +223,6 @@ type ClientStatus = {
   uf?: string;
   tenant_id?: string;
 };
-
 const conversaoOptions: Record<string, string[]> = {
   'Agendamento':          ['Videochamada', 'Visita Presencial', 'Ligação Telefônica', 'Agendamento de Serviço'],
   'Venda Direta':         ['Link de Pagamento', 'Transferência PIX', 'Falar com Vendedor'],
@@ -243,6 +242,7 @@ export default function App() {
   // --- STATES ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [userLevel, setUserLevel] = useState<'semi-Deus' | 'gestor' | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [view, setView] = useState<'home' | 'client-hub' | 'inventory' | 'conversas' | 'config'>('home');
   const [isLoading, setIsLoading] = useState(false);
@@ -329,6 +329,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) {
         setUserEmail(session.user.email);
+        fetchUserLevel(session.user.email);
         setIsLoggedIn(true);
       }
       setIsLoadingAuth(false);
@@ -336,9 +337,11 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user?.email) {
         setUserEmail(session.user.email);
+        fetchUserLevel(session.user.email);
         setIsLoggedIn(true);
       } else {
         setUserEmail('');
+        setUserLevel(null);
         setIsLoggedIn(false);
       }
       setIsLoadingAuth(false);
@@ -347,8 +350,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isLoggedIn) fetchClientes();
-  }, [isLoggedIn]);
+    if (isLoggedIn && userLevel !== null) fetchClientes();
+  }, [isLoggedIn, userLevel]);
 
   useEffect(() => {
     if (view === 'inventory' && selectedClienteId) fetchProdutos();
@@ -441,14 +444,37 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000);
   };
 
+  const fetchUserLevel = async (email: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('z_bd_usuarios_permissoes')
+        .select('level')
+        .eq('email', email)
+        .single();
+      
+      if (error) {
+        setUserLevel('gestor');
+        return;
+      }
+      
+      if (data) setUserLevel(data.level as any);
+      else setUserLevel('gestor');
+    } catch (err) {
+      setUserLevel('gestor');
+    }
+  };
+
   const fetchClientes = async () => {
     if (!userEmail) return;
     setIsLoadingClientes(true);
-    const { data, error } = await supabase
-      .from('z_bd_atendimento_clientes')
-      .select('*')
-      .eq('user_id', userEmail)
-      .order('nome', { ascending: true });
+    
+    let query = supabase.from('z_bd_atendimento_clientes').select('*');
+    
+    if (userLevel !== 'semi-Deus') {
+      query = query.eq('user_id', userEmail);
+    }
+
+    const { data, error } = await query.order('nome', { ascending: true });
     if (error) {
       console.error(error);
       setIsLoadingClientes(false);
